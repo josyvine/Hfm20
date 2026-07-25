@@ -64,8 +64,6 @@ public class VideoViewerActivity extends Activity {
     private ArrayList<String> mFilePaths;
     private int mCurrentIndex;
     private boolean mFileDeleted = false;
-    
-    // Removed legacy MediaController to fix "Double Play" glitch
 
     private BroadcastReceiver deleteCompletionReceiver;
     private BroadcastReceiver compressionBroadcastReceiver;
@@ -118,38 +116,38 @@ public class VideoViewerActivity extends Activity {
 
     private void setupListeners() {
         closeButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        onBackPressed();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                onBackPressed();
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        showFileActionDialog();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                showFileActionDialog();
+            }
+        });
 
         // Skip to Previous Video File
         prevButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        if (mCurrentIndex > 0) {
-                                                loadVideo(mCurrentIndex - 1);
-                                        }
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                if (mCurrentIndex > 0) {
+                    loadVideo(mCurrentIndex - 1);
+                }
+            }
+        });
 
         // Skip to Next Video File
         nextButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        if (mCurrentIndex < mFilePaths.size() - 1) {
-                                                loadVideo(mCurrentIndex + 1);
-                                        }
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                if (mCurrentIndex < mFilePaths.size() - 1) {
+                    loadVideo(mCurrentIndex + 1);
+                }
+            }
+        });
 
         // Play / Pause Toggle Fix
         playPauseFooterButton.setOnClickListener(new View.OnClickListener() {
@@ -185,19 +183,18 @@ public class VideoViewerActivity extends Activity {
         });
 
         shareButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        shareFile();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                shareFile();
+            }
+        });
 
         openWithButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        openWith();
-                                }
-                        });
-
+            @Override
+            public void onClick(View v) {
+                openWith();
+            }
+        });
     }
 
     private void togglePlayPause() {
@@ -222,24 +219,22 @@ public class VideoViewerActivity extends Activity {
 
         fileNameTextView.setText(videoFile.getName());
         
-        // Use clean URI loading without the legacy MediaController
         videoView.setVideoURI(Uri.fromFile(videoFile));
         videoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                                @Override
-                                public void onPrepared(MediaPlayer mp) {
-                                        mp.setLooping(true);
-                                        videoView.start();
-                    // Set Pause icon because video auto-starts
-                    playPauseFooterButton.setImageResource(R.drawable.pause_24px);
-                                }
-                        });
+            @Override
+            public void onPrepared(MediaPlayer mp) {
+                mp.setLooping(true);
+                videoView.start();
+                playPauseFooterButton.setImageResource(R.drawable.pause_24px);
+            }
+        });
         videoView.setOnErrorListener(new MediaPlayer.OnErrorListener() {
-                                @Override
-                                public boolean onError(MediaPlayer mp, int what, int extra) {
-                                        Toast.makeText(VideoViewerActivity.this, "Error: Could not play this video file.", Toast.LENGTH_LONG).show();
-                                        return true;
-                                }
-                        });
+            @Override
+            public boolean onError(MediaPlayer mp, int what, int extra) {
+                Toast.makeText(VideoViewerActivity.this, "Error: Could not play this video file.", Toast.LENGTH_LONG).show();
+                return true;
+            }
+        });
 
         updateNavigationButtons();
     }
@@ -248,7 +243,6 @@ public class VideoViewerActivity extends Activity {
         prevButton.setEnabled(mCurrentIndex > 0);
         nextButton.setEnabled(mCurrentIndex < mFilePaths.size() - 1);
 
-        // Visibility Fix: Ensure skip buttons are always visible but faded if disabled
         prevButton.setAlpha(mCurrentIndex > 0 ? 1.0f : 0.3f);
         nextButton.setAlpha(mCurrentIndex < mFilePaths.size() - 1 ? 1.0f : 0.3f);
     }
@@ -261,45 +255,45 @@ public class VideoViewerActivity extends Activity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Choose an action");
         builder.setItems(options, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                        switch (which) {
-                                                case 0:
-                                                        showDetailsDialog();
-                                                        break;
-                        case 1:
-                            showSendToDropDialog(new File(mFilePaths.get(mCurrentIndex)));
-                            break;
-                                                case 2:
-                                                        compressFile();
-                                                        break;
-                                                case 3:
-                                                        hideFile();
-                                                        break;
-                                                case 4: // Move to Recycle Bin (Dual Logic)
-                            AlertDialog.Builder binBuilder = new AlertDialog.Builder(VideoViewerActivity.this);
-                            binBuilder.setTitle("Choose Recycle Bin");
-                            binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialogInterface, int whichBin) {
-                                    moveToRecycleBin(whichBin == 1);
-                                }
-                            });
-                            binBuilder.show();
-                                                        break;
-                                                case 5:
-                                                        performFileDeletion();
-                                                        break;
-                                        }
-                                }
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                switch (which) {
+                    case 0:
+                        showDetailsDialog();
+                        break;
+                    case 1:
+                        showSendToDropDialog(new File(mFilePaths.get(mCurrentIndex)));
+                        break;
+                    case 2:
+                        compressFile();
+                        break;
+                    case 3:
+                        hideFile();
+                        break;
+                    case 4: // Move to Recycle Bin
+                        AlertDialog.Builder binBuilder = new AlertDialog.Builder(VideoViewerActivity.this);
+                        binBuilder.setTitle("Choose Recycle Bin");
+                        binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int whichBin) {
+                                moveToRecycleBin(whichBin == 1);
+                            }
                         });
+                        binBuilder.show();
+                        break;
+                    case 5:
+                        performFileDeletion();
+                        break;
+                }
+            }
+        });
         builder.setOnCancelListener(new DialogInterface.OnCancelListener() {
-                                @Override
-                                public void onCancel(DialogInterface dialog) {
-                                        videoView.start();
-                    playPauseFooterButton.setImageResource(R.drawable.pause_24px);
-                                }
-                        });
+            @Override
+            public void onCancel(DialogInterface dialog) {
+                videoView.start();
+                playPauseFooterButton.setImageResource(R.drawable.pause_24px);
+            }
+        });
         builder.show();
     }
 
@@ -337,30 +331,30 @@ public class VideoViewerActivity extends Activity {
         moreButton.setEnabled(ApiKeyManager.getApiKey(this) != null && isConnected);
 
         moreButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        analyzer.analyze(files);
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                analyzer.analyze(files);
+            }
+        });
 
         copyButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                                        ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
-                                        clipboard.setPrimaryClip(clip);
-                                        Toast.makeText(VideoViewerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(VideoViewerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         closeButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        dialog.dismiss();
-                                        videoView.start();
-                    playPauseFooterButton.setImageResource(R.drawable.pause_24px);
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                videoView.start();
+                playPauseFooterButton.setImageResource(R.drawable.pause_24px);
+            }
+        });
 
         dialog.show();
     }
@@ -473,9 +467,9 @@ public class VideoViewerActivity extends Activity {
         }
 
         boolean moveSuccess = false;
+        File destFile = null;
 
         if (useSdCardBin && StorageUtils.isFileOnSdCard(this, sourceFile)) {
-            // Enhancement 2: SD Card SAF Move
             if (StorageUtils.moveFileOnSdCardSafely(this, sourceFile)) {
                 moveSuccess = true;
             } else {
@@ -484,7 +478,6 @@ public class VideoViewerActivity extends Activity {
         }
 
         if (!moveSuccess) {
-            // Move to Phone Bin
             File recycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
             if (!recycleBinDir.exists()) {
                 if (!recycleBinDir.mkdir()) {
@@ -493,7 +486,7 @@ public class VideoViewerActivity extends Activity {
                 }
             }
 
-            File destFile = new File(recycleBinDir, sourceFile.getName());
+            destFile = new File(recycleBinDir, sourceFile.getName());
             if (destFile.exists()) {
                 String name = sourceFile.getName();
                 String extension = "";
@@ -507,13 +500,10 @@ public class VideoViewerActivity extends Activity {
 
             if (sourceFile.renameTo(destFile)) {
                 moveSuccess = true;
-                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
             } else {
-                // Fallback copy-delete
                 if (StorageUtils.copyFile(this, sourceFile, destFile)) {
                     if (StorageUtils.deleteFile(this, sourceFile)) {
                         moveSuccess = true;
-                        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
                     } else {
                         destFile.delete();
                     }
@@ -524,8 +514,14 @@ public class VideoViewerActivity extends Activity {
         if (moveSuccess) {
             Toast.makeText(this, "File moved to Recycle Bin.", Toast.LENGTH_SHORT).show();
             mFileDeleted = true;
+
+            // Immediately purge source path from MediaStore DB to resolve Glitch 1
+            MediaStoreUtils.purgePathFromMediaStore(this, sourceFile.getAbsolutePath());
+            if (destFile != null) {
+                MediaStoreUtils.scanNewPath(this, destFile);
+            }
+
             mFilePaths.remove(mCurrentIndex);
-            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(sourceFile)));
 
             if (mFilePaths.isEmpty()) {
                 onBackPressed();
@@ -551,7 +547,7 @@ public class VideoViewerActivity extends Activity {
 
         Intent intent = new Intent(this, DeleteService.class);
         intent.putStringArrayListExtra(DeleteService.EXTRA_FILES_TO_DELETE, filesToDelete);
-        intent.putExtra("batch_size", 1); // Enhancement 4: Batch size 1
+        intent.putExtra("batch_size", 1);
         ContextCompat.startForegroundService(this, intent);
     }
 
@@ -601,7 +597,6 @@ public class VideoViewerActivity extends Activity {
         return type;
     }
 
-
     @Override
     public void onBackPressed() {
         if (mFileDeleted) {
@@ -613,7 +608,6 @@ public class VideoViewerActivity extends Activity {
         }
         super.onBackPressed();
     }
-
 
     @Override
     protected void onPause() {
@@ -649,7 +643,7 @@ public class VideoViewerActivity extends Activity {
                         loadVideo(mCurrentIndex);
                     }
                 } else {
-                                        Toast.makeText(VideoViewerActivity.this, "Failed to delete the file.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(VideoViewerActivity.this, "Failed to delete the file.", Toast.LENGTH_SHORT).show();
                 }
             }
         };
@@ -664,7 +658,7 @@ public class VideoViewerActivity extends Activity {
         LocalBroadcastManager.getInstance(this).registerReceiver(compressionBroadcastReceiver, new IntentFilter(CompressionService.ACTION_COMPRESSION_COMPLETE));
     }
 
-        @Override
+    @Override
     protected void onDestroy() {
         if (deleteCompletionReceiver != null) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(deleteCompletionReceiver);
