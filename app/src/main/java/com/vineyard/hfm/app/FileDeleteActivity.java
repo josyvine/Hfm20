@@ -110,7 +110,7 @@ public class FileDeleteActivity extends Activity {
 
         setupRecyclerView();
         setupListeners();
-        setupBroadcastReceivers(); // This was missing in the previous pasted code
+        setupBroadcastReceivers();
         updateSelectionCount();
     }
 
@@ -318,13 +318,11 @@ public class FileDeleteActivity extends Activity {
         recycleButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // Show dialog to choose between Phone or SD Card Recycle Bin
                 AlertDialog.Builder binBuilder = new AlertDialog.Builder(FileDeleteActivity.this);
                 binBuilder.setTitle("Choose Recycle Bin");
                 binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int which) {
-                        // which == 0 -> Phone, which == 1 -> SD Card
                         new MoveToRecycleTask(selectedFiles, which == 1).execute();
                     }
                 });
@@ -465,8 +463,6 @@ public class FileDeleteActivity extends Activity {
         return sb.toString();
     }
 
-    // --- OPTIMIZED DELETION PROCESS ---
-
     private void initiateDeletionProcess() {
         final List<File> initiallySelectedFiles = getSelectedFiles();
 
@@ -475,11 +471,9 @@ public class FileDeleteActivity extends Activity {
             return;
         }
 
-        // Start background pre-check to prevent UI freeze
         new PreDeletionCheckTask().execute();
     }
 
-    // Optimized AsyncTask using HashMap/HashSet
     private class PreDeletionCheckTask extends AsyncTask<Void, Void, PreDeletionResults> {
         private AlertDialog progressDialog;
 
@@ -506,7 +500,6 @@ public class FileDeleteActivity extends Activity {
                     File parentDir = selectedFile.getParentFile();
                     if (parentDir != null) {
                         String parentPath = parentDir.getAbsolutePath();
-                        // Cache directory contents to avoid repeated disk reads
                         if (!dirCache.containsKey(parentPath)) {
                             dirCache.put(parentPath, parentDir.listFiles());
                         }
@@ -615,7 +608,6 @@ public class FileDeleteActivity extends Activity {
             filePathsToDelete.add(file.getAbsolutePath());
         }
 
-        // LOAD BRIDGE to prevent crash on massive selections
         FileBridge.mFilesToDelete = filePathsToDelete;
 
         deletionProgressLayout.setVisibility(View.VISIBLE);
@@ -667,7 +659,6 @@ public class FileDeleteActivity extends Activity {
         }
     }
 
-    // Restored methods for file viewing
     private void openFileViewer(final File file) {
         new AsyncTask<Void, Void, Intent>() {
             @Override
@@ -807,7 +798,6 @@ public class FileDeleteActivity extends Activity {
         super.onDestroy();
     }
     
-    // Recycle Bin Task class
     private class MoveToRecycleTask extends AsyncTask<Void, Void, List<File>> {
         private AlertDialog progressDialog;
         private List<File> filesToMove;
@@ -833,6 +823,8 @@ public class FileDeleteActivity extends Activity {
         @Override
         protected List<File> doInBackground(Void... voids) {
             List<File> movedFiles = new ArrayList<>();
+            List<String> purgedSourcePaths = new ArrayList<>();
+
             File recycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
             if (!recycleBinDir.exists() && !useSdCardBin) {
                  if (!recycleBinDir.mkdir()) return new ArrayList<>();
@@ -842,13 +834,14 @@ public class FileDeleteActivity extends Activity {
                 if (!sourceFile.exists()) continue;
 
                 boolean moveSuccess = false;
+                File destFile = null;
 
                 if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
                      if (StorageUtils.moveFileOnSdCardSafely(context, sourceFile)) {
                          moveSuccess = true;
                      }
                 } else {
-                     File destFile = new File(recycleBinDir, sourceFile.getName());
+                     destFile = new File(recycleBinDir, sourceFile.getName());
                      if (destFile.exists()) {
                         String name = sourceFile.getName();
                         String extension = "";
@@ -871,14 +864,22 @@ public class FileDeleteActivity extends Activity {
                             }
                         } 
                     }
-                    if(moveSuccess) sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
                 }
 
                 if (moveSuccess) {
                     movedFiles.add(sourceFile);
-                    sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(sourceFile)));
+                    purgedSourcePaths.add(sourceFile.getAbsolutePath());
+                    if (destFile != null) {
+                        MediaStoreUtils.scanNewPath(context, destFile);
+                    }
                 }
             }
+
+            // Immediately purge source file paths from MediaStore DB to resolve Glitch 1
+            if (!purgedSourcePaths.isEmpty()) {
+                MediaStoreUtils.purgePathsFromMediaStore(context, purgedSourcePaths);
+            }
+
             return movedFiles;
         }
 
