@@ -116,57 +116,57 @@ public class PdfViewerActivity extends Activity {
 
     private void setupListeners() {
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					finish();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                finish();
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					showFileActionDialog();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                showFileActionDialog();
+            }
+        });
 
         shareButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					shareFile();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                shareFile();
+            }
+        });
 
         openWithButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					openWith();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                openWith();
+            }
+        });
 
         copyContentButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					copyAllContent();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                copyAllContent();
+            }
+        });
 
         prevButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					if (currentPageIndex > 0) {
-						showPage(currentPageIndex - 1);
-					}
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                if (currentPageIndex > 0) {
+                    showPage(currentPageIndex - 1);
+                }
+            }
+        });
 
         nextButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					if (pdfRenderer != null && currentPageIndex < pdfRenderer.getPageCount() - 1) {
-						showPage(currentPageIndex + 1);
-					}
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                if (pdfRenderer != null && currentPageIndex < pdfRenderer.getPageCount() - 1) {
+                    showPage(currentPageIndex + 1);
+                }
+            }
+        });
     }
 
     @Override
@@ -243,38 +243,38 @@ public class PdfViewerActivity extends Activity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Choose an action");
         builder.setItems(options, new DialogInterface.OnClickListener() {
-				@Override
-				public void onClick(DialogInterface dialog, int which) {
-					switch (which) {
-						case 0:
-							showDetailsDialog();
-							break;
-                        case 1:
-                            showSendToDropDialog(new File(filePath));
-                            break;
-						case 2:
-							compressFile();
-							break;
-						case 3:
-							hideFile();
-							break;
-						case 4: // Move to Recycle Bin (Dual Logic)
-                            AlertDialog.Builder binBuilder = new AlertDialog.Builder(PdfViewerActivity.this);
-                            binBuilder.setTitle("Choose Recycle Bin");
-                            binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialogInterface, int whichBin) {
-                                    moveToRecycleBin(whichBin == 1);
-                                }
-                            });
-                            binBuilder.show();
-							break;
-						case 5:
-							performFileDeletion();
-							break;
-					}
-				}
-			});
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                switch (which) {
+                    case 0:
+                        showDetailsDialog();
+                        break;
+                    case 1:
+                        showSendToDropDialog(new File(filePath));
+                        break;
+                    case 2:
+                        compressFile();
+                        break;
+                    case 3:
+                        hideFile();
+                        break;
+                    case 4: // Move to Recycle Bin (Dual Logic)
+                        AlertDialog.Builder binBuilder = new AlertDialog.Builder(PdfViewerActivity.this);
+                        binBuilder.setTitle("Choose Recycle Bin");
+                        binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int whichBin) {
+                                moveToRecycleBin(whichBin == 1);
+                            }
+                        });
+                        binBuilder.show();
+                        break;
+                    case 5:
+                        performFileDeletion();
+                        break;
+                }
+            }
+        });
         builder.show();
     }
 
@@ -312,28 +312,28 @@ public class PdfViewerActivity extends Activity {
         moreButton.setEnabled(ApiKeyManager.getApiKey(this) != null && isConnected);
 
         moreButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					analyzer.analyze(files);
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                analyzer.analyze(files);
+            }
+        });
 
         copyButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-					ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
-					clipboard.setPrimaryClip(clip);
-					Toast.makeText(PdfViewerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(PdfViewerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
 
         dialog.show();
     }
@@ -442,7 +442,6 @@ public class PdfViewerActivity extends Activity {
         finish();
     }
 
-
     private void moveToRecycleBin(boolean useSdCardBin) {
         if (filePath == null) {
             Toast.makeText(this, "Error: File path is missing.", Toast.LENGTH_SHORT).show();
@@ -464,9 +463,9 @@ public class PdfViewerActivity extends Activity {
         }
 
         boolean moveSuccess = false;
+        File destFile = null;
 
         if (useSdCardBin && StorageUtils.isFileOnSdCard(this, sourceFile)) {
-            // Enhancement 2: SD Card SAF Move
             if (StorageUtils.moveFileOnSdCardSafely(this, sourceFile)) {
                 moveSuccess = true;
             } else {
@@ -475,7 +474,6 @@ public class PdfViewerActivity extends Activity {
         }
 
         if (!moveSuccess) {
-            // Move to Phone Bin
             File recycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
             if (!recycleBinDir.exists()) {
                 if (!recycleBinDir.mkdir()) {
@@ -484,7 +482,7 @@ public class PdfViewerActivity extends Activity {
                 }
             }
 
-            File destFile = new File(recycleBinDir, sourceFile.getName());
+            destFile = new File(recycleBinDir, sourceFile.getName());
             if (destFile.exists()) {
                 String name = sourceFile.getName();
                 String extension = "";
@@ -498,13 +496,10 @@ public class PdfViewerActivity extends Activity {
 
             if (sourceFile.renameTo(destFile)) {
                 moveSuccess = true;
-                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
             } else {
-                // Fallback copy-delete
                 if (StorageUtils.copyFile(this, sourceFile, destFile)) {
                     if (StorageUtils.deleteFile(this, sourceFile)) {
                         moveSuccess = true;
-                        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
                     } else {
                         destFile.delete();
                     }
@@ -514,7 +509,13 @@ public class PdfViewerActivity extends Activity {
 
         if (moveSuccess) {
             Toast.makeText(this, "File moved to Recycle Bin.", Toast.LENGTH_SHORT).show();
-            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(sourceFile)));
+
+            // Instantly purge source path from MediaStore DB to resolve Glitch 1
+            MediaStoreUtils.purgePathFromMediaStore(this, sourceFile.getAbsolutePath());
+            if (destFile != null) {
+                MediaStoreUtils.scanNewPath(this, destFile);
+            }
+
             Intent resultIntent = new Intent();
             resultIntent.putExtra(RESULT_FILE_DELETED, true);
             setResult(Activity.RESULT_OK, resultIntent);
@@ -560,10 +561,9 @@ public class PdfViewerActivity extends Activity {
 
         Intent intent = new Intent(this, DeleteService.class);
         intent.putStringArrayListExtra(DeleteService.EXTRA_FILES_TO_DELETE, filesToDelete);
-        intent.putExtra("batch_size", 1); // Enhancement 4: Batch size 1
+        intent.putExtra("batch_size", 1);
         ContextCompat.startForegroundService(this, intent);
     }
-
 
     private void openPdfRenderer(File file) throws IOException {
         parcelFileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
