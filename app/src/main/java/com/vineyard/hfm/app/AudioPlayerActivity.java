@@ -125,22 +125,21 @@ public class AudioPlayerActivity extends Activity {
             mediaPlayer.setDataSource(filePath);
             mediaPlayer.prepareAsync();
             mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-					@Override
-					public void onPrepared(MediaPlayer mp) {
-						seekBar.setMax(mp.getDuration());
-						totalTimeTextView.setText(formatDuration(mp.getDuration()));
-						mp.start();
-						// UPDATED: Use custom pause icon
-						playPauseButton.setImageResource(R.drawable.pause_24px);
-						updateSeekBar();
-					}
-				});
+                @Override
+                public void onPrepared(MediaPlayer mp) {
+                    seekBar.setMax(mp.getDuration());
+                    totalTimeTextView.setText(formatDuration(mp.getDuration()));
+                    mp.start();
+                    playPauseButton.setImageResource(R.drawable.pause_24px);
+                    updateSeekBar();
+                }
+            });
             mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-					@Override
-					public void onCompletion(MediaPlayer mp) {
-						playNext();
-					}
-				});
+                @Override
+                public void onCompletion(MediaPlayer mp) {
+                    playNext();
+                }
+            });
         } catch (IOException e) {
             Toast.makeText(this, "Error loading audio file.", Toast.LENGTH_SHORT).show();
         }
@@ -150,79 +149,77 @@ public class AudioPlayerActivity extends Activity {
 
     private void setupListeners() {
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					onBackPressed();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                onBackPressed();
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					showFileActionDialog();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                showFileActionDialog();
+            }
+        });
 
         playPauseButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					togglePlayPause();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                togglePlayPause();
+            }
+        });
 
         prevButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					playPrevious();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                playPrevious();
+            }
+        });
 
         nextButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					playNext();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                playNext();
+            }
+        });
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-				@Override
-				public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-					if (fromUser && mediaPlayer != null) {
-						mediaPlayer.seekTo(progress);
-					}
-				}
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && mediaPlayer != null) {
+                    mediaPlayer.seekTo(progress);
+                }
+            }
 
-				@Override
-				public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
 
-				@Override
-				public void onStopTrackingTouch(SeekBar seekBar) {}
-			});
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
 
         shareButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					shareFile();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                shareFile();
+            }
+        });
 
         openWithButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					openWith();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                openWith();
+            }
+        });
     }
 
     private void togglePlayPause() {
         if (mediaPlayer != null) {
             if (mediaPlayer.isPlaying()) {
                 mediaPlayer.pause();
-                // UPDATED: Use custom play icon
                 playPauseButton.setImageResource(R.drawable.play_arrow_24px);
             } else {
                 mediaPlayer.start();
-                // UPDATED: Use custom pause icon
                 playPauseButton.setImageResource(R.drawable.pause_24px);
                 updateSeekBar();
             }
@@ -239,7 +236,6 @@ public class AudioPlayerActivity extends Activity {
         if (mCurrentIndex < mFilePaths.size() - 1) {
             loadAudioFile(mCurrentIndex + 1);
         } else {
-            // UPDATED: Use custom play icon when resetting to the beginning
             playPauseButton.setImageResource(R.drawable.play_arrow_24px);
             seekBar.setProgress(0);
             currentTimeTextView.setText(formatDuration(0));
@@ -254,37 +250,36 @@ public class AudioPlayerActivity extends Activity {
     private void showFileActionDialog() {
         if (mediaPlayer != null && mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
-            // UPDATED: Use custom play icon
             playPauseButton.setImageResource(R.drawable.play_arrow_24px);
         }
         final CharSequence[] options = {"Details", "Send to Drop Zone", "Compress", "Hide", "Move to Recycle Bin", "Delete Permanently"};
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Choose an action");
         builder.setItems(options, new DialogInterface.OnClickListener() {
-				@Override
-				public void onClick(DialogInterface dialog, int which) {
-					switch (which) {
-						case 0: // Details
-							showDetailsDialog();
-							break;
-                        case 1: // Send to Drop Zone
-                            showSendToDropDialog(new File(mFilePaths.get(mCurrentIndex)));
-                            break;
-						case 2: // Compress
-							compressFile();
-							break;
-						case 3: // Hide
-							hideFile();
-							break;
-						case 4: // Move to Recycle
-							moveToRecycleBin();
-							break;
-						case 5: // Delete
-							performFileDeletion();
-							break;
-					}
-				}
-			});
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                switch (which) {
+                    case 0: // Details
+                        showDetailsDialog();
+                        break;
+                    case 1: // Send to Drop Zone
+                        showSendToDropDialog(new File(mFilePaths.get(mCurrentIndex)));
+                        break;
+                    case 2: // Compress
+                        compressFile();
+                        break;
+                    case 3: // Hide
+                        hideFile();
+                        break;
+                    case 4: // Move to Recycle
+                        moveToRecycleBin();
+                        break;
+                    case 5: // Delete
+                        performFileDeletion();
+                        break;
+                }
+            }
+        });
         builder.show();
     }
 
@@ -322,28 +317,28 @@ public class AudioPlayerActivity extends Activity {
         moreButton.setEnabled(ApiKeyManager.getApiKey(this) != null && isConnected);
 
         moreButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					analyzer.analyze(files);
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                analyzer.analyze(files);
+            }
+        });
 
         copyButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-					ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
-					clipboard.setPrimaryClip(clip);
-					Toast.makeText(AudioPlayerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(AudioPlayerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
 
         dialog.show();
     }
@@ -475,12 +470,30 @@ public class AudioPlayerActivity extends Activity {
             destFile = new File(recycleBinDir, name + "_" + System.currentTimeMillis() + extension);
         }
 
+        boolean moveSuccess = false;
         if (sourceFile.renameTo(destFile)) {
+            moveSuccess = true;
+        } else {
+            if (StorageUtils.copyFile(this, sourceFile, destFile)) {
+                if (StorageUtils.deleteFile(this, sourceFile)) {
+                    moveSuccess = true;
+                } else {
+                    destFile.delete();
+                }
+            }
+        }
+
+        if (moveSuccess) {
             Toast.makeText(this, "File moved to Recycle Bin.", Toast.LENGTH_SHORT).show();
             mFileDeleted = true;
+
+            // Immediately purge source path from MediaStore DB to resolve Glitch 1
+            MediaStoreUtils.purgePathFromMediaStore(this, sourceFile.getAbsolutePath());
+            if (destFile != null) {
+                MediaStoreUtils.scanNewPath(this, destFile);
+            }
+
             mFilePaths.remove(mCurrentIndex);
-            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(sourceFile)));
-            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
 
             if (mFilePaths.isEmpty()) {
                 onBackPressed();
@@ -572,10 +585,10 @@ public class AudioPlayerActivity extends Activity {
 
     private String formatDuration(long millis) {
         return String.format(Locale.getDefault(), "%02d:%02d",
-							 TimeUnit.MILLISECONDS.toMinutes(millis),
-							 TimeUnit.MILLISECONDS.toSeconds(millis) -
-							 TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis))
-							 );
+                TimeUnit.MILLISECONDS.toMinutes(millis),
+                TimeUnit.MILLISECONDS.toSeconds(millis) -
+                TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(millis))
+        );
     }
 
     private void releaseMediaPlayer() {
