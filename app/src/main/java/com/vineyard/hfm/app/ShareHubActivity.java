@@ -188,7 +188,8 @@ public class ShareHubActivity extends FragmentActivity implements WifiP2pManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // Android 12+
             requiredPermissions.add(Manifest.permission.NEARBY_WIFI_DEVICES);
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) { // Android 10 and below
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) { // Android 10 and below (e.g., Huawei Nova 7 SE / EMUI 10.1 API 29)
+            requiredPermissions.add(Manifest.permission.READ_EXTERNAL_STORAGE);
             requiredPermissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
         }
 
