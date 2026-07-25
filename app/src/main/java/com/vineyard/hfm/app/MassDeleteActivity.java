@@ -126,59 +126,57 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
     private void setupListeners() {
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					finish();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                finish();
+            }
+        });
 
         filterButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					showFilterMenu(v);
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                showFilterMenu(v);
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					showFileOperationsDialog();
-				}
-			});
-
+            @Override
+            public void onClick(View v) {
+                showFileOperationsDialog();
+            }
+        });
 
         searchInput.addTextChangedListener(new TextWatcher() {
-				@Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-				@Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-					fetchFolderSuggestions(s.toString());
-				}
-				@Override public void afterTextChanged(Editable s) {}
-			});
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                fetchFolderSuggestions(s.toString());
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
 
         searchInput.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-				@Override
-				public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-					String suggestion = (String) parent.getItemAtPosition(position);
-					String currentText = searchInput.getText().toString();
-					int lastSpaceIndex = currentText.lastIndexOf(' ');
-					String newText = (lastSpaceIndex != -1) ? currentText.substring(0, lastSpaceIndex + 1) + suggestion + " " : suggestion + " ";
-					searchInput.setText(newText);
-					searchInput.setSelection(newText.length());
-				}
-			});
-
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                String suggestion = (String) parent.getItemAtPosition(position);
+                String currentText = searchInput.getText().toString();
+                int lastSpaceIndex = currentText.lastIndexOf(' ');
+                String newText = (lastSpaceIndex != -1) ? currentText.substring(0, lastSpaceIndex + 1) + suggestion + " " : suggestion + " ";
+                searchInput.setText(newText);
+                searchInput.setSelection(newText.length());
+            }
+        });
 
         searchInput.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-				@Override
-				public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-					executeQuery(searchInput.getText().toString());
-					InputMethodManager imm = (InputMethodManager) getSystemService(Activity.INPUT_METHOD_SERVICE);
-					if (imm != null) {
-						imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
-					}
-					return true;
-				}
-			});
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                executeQuery(searchInput.getText().toString());
+                InputMethodManager imm = (InputMethodManager) getSystemService(Activity.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                }
+                return true;
+            }
+        });
     }
 
     private void setupRecyclerView() {
@@ -194,58 +192,58 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     private void setupPinchToZoom() {
         scaleGestureDetector = new ScaleGestureDetector(this, new PinchZoomListener());
         searchResultsGrid.setOnTouchListener(new View.OnTouchListener() {
-				@Override
-				public boolean onTouch(View v, MotionEvent event) {
-					scaleGestureDetector.onTouchEvent(event);
-					return false;
-				}
-			});
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                scaleGestureDetector.onTouchEvent(event);
+                return false;
+            }
+        });
     }
 
     private void executeQuery(final String query) {
         searchExecutor.execute(new Runnable() {
-				@Override
-				public void run() {
-					final QueryParameters params = parseQuery(query);
-					List<MassDeleteAdapter.SearchResult> mediaStoreResults = executeQueryWithMediaStore(params);
+            @Override
+            public void run() {
+                final QueryParameters params = parseQuery(query);
+                List<MassDeleteAdapter.SearchResult> mediaStoreResults = executeQueryWithMediaStore(params);
 
-					if (!mediaStoreResults.isEmpty()) {
-						updateUIWithResults(mediaStoreResults, params);
-					} else {
-						runOnUiThread(new Runnable() {
-								@Override
-								public void run() {
-									Toast.makeText(MassDeleteActivity.this, "MediaStore found nothing. Starting deep scan...", Toast.LENGTH_SHORT).show();
-								}
-							});
-						List<MassDeleteAdapter.SearchResult> fileSystemResults = performFallbackFileSearch(params);
-						updateUIWithResults(fileSystemResults, params);
-					}
-				}
-			});
+                if (!mediaStoreResults.isEmpty()) {
+                    updateUIWithResults(mediaStoreResults, params);
+                } else {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MassDeleteActivity.this, "MediaStore found nothing. Starting deep scan...", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                    List<MassDeleteAdapter.SearchResult> fileSystemResults = performFallbackFileSearch(params);
+                    updateUIWithResults(fileSystemResults, params);
+                }
+            }
+        });
     }
 
     private void updateUIWithResults(final List<MassDeleteAdapter.SearchResult> results, final QueryParameters params) {
         runOnUiThread(new Runnable() {
-				@Override
-				public void run() {
-					displayList.clear();
-					displayList.addAll(results);
+            @Override
+            public void run() {
+                displayList.clear();
+                displayList.addAll(results);
 
-					if (params.startRange != -1 && params.endRange != -1) {
-						int start = Math.max(0, params.startRange - 1);
-						int end = Math.min(displayList.size() - 1, params.endRange - 1);
-						for (int i = start; i <= end; i++) {
-							displayList.get(i).setExcluded(false);
-						}
-					}
+                if (params.startRange != -1 && params.endRange != -1) {
+                    int start = Math.max(0, params.startRange - 1);
+                    int end = Math.min(displayList.size() - 1, params.endRange - 1);
+                    for (int i = start; i <= end; i++) {
+                        displayList.get(i).setExcluded(false);
+                    }
+                }
 
-					adapter.updateData(displayList);
-					if (results.isEmpty()) {
-						Toast.makeText(MassDeleteActivity.this, "No files found.", Toast.LENGTH_SHORT).show();
-					}
-				}
-			});
+                adapter.updateData(displayList);
+                if (results.isEmpty()) {
+                    Toast.makeText(MassDeleteActivity.this, "No files found.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 
     private List<MassDeleteAdapter.SearchResult> executeQueryWithMediaStore(QueryParameters params) {
@@ -291,7 +289,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 int displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
                 int dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED);
                 int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
-                
+
                 while (cursor.moveToNext()) {
                     long id = cursor.getLong(idColumn);
                     int mediaType = cursor.getInt(mediaTypeColumn);
@@ -299,8 +297,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                     long dateModifiedMillis = cursor.getLong(dateModifiedColumn) * 1000;
                     String path = cursor.getString(dataColumn);
 
-                    // --- DATE & THUMBNAIL FIX START ---
-                    // Verify if the actual file on disk is newer than MediaStore records (fixes "2019" issue)
                     if (path != null) {
                         File f = new File(path);
                         if (f.exists()) {
@@ -310,7 +306,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                             }
                         }
                     }
-                    // --- DATE & THUMBNAIL FIX END ---
 
                     Uri contentUri;
                     if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) {
@@ -321,7 +316,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                         contentUri = ContentUris.withAppendedId(queryUri, id);
                     }
 
-                    // We wrap the result and sort later in Java to handle the filesystem date correction
                     results.add(new MassDeleteAdapter.SearchResult(contentUri, id, displayName));
                 }
                 cursor.close();
@@ -332,14 +326,10 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
             }
         }
 
-        // Final Sort based on the corrected dates
         Collections.sort(results, new Comparator<MassDeleteAdapter.SearchResult>() {
             @Override
             public int compare(MassDeleteAdapter.SearchResult r1, MassDeleteAdapter.SearchResult r2) {
-                // Since SearchResult doesn't store date in your provided snippet, 
-                // we perform a quick file check if necessary, or rely on the query's base sort.
-                // However, the best fix for 50,000 files is ensuring MediaStore gets updated.
-                return 0; // Keeping structure identical to user logic
+                return 0;
             }
         });
 
@@ -380,13 +370,13 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         }
 
         Collections.sort(results, new Comparator<MassDeleteAdapter.SearchResult>() {
-				@Override
-				public int compare(MassDeleteAdapter.SearchResult r1, MassDeleteAdapter.SearchResult r2) {
-					File f1 = new File(r1.getUri().getPath());
-					File f2 = new File(r2.getUri().getPath());
-					return Long.compare(f2.lastModified(), f1.lastModified());
-				}
-			});
+            @Override
+            public int compare(MassDeleteAdapter.SearchResult r1, MassDeleteAdapter.SearchResult r2) {
+                File f1 = new File(r1.getUri().getPath());
+                File f2 = new File(r2.getUri().getPath());
+                return Long.compare(f2.lastModified(), f1.lastModified());
+            }
+        });
         return results;
     }
 
@@ -401,7 +391,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 }
             } else {
                 boolean folderMatch = (params.folderPath == null) ||
-					(file.getAbsolutePath().toLowerCase().contains(params.folderPath.toLowerCase()));
+                    (file.getAbsolutePath().toLowerCase().contains(params.folderPath.toLowerCase()));
 
                 if (folderMatch) {
                     if (isFileTypeMatch(file.getName())) {
@@ -422,18 +412,18 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         } else if ("documents".equals(currentFilterType)) {
             selection.append(MediaStore.Files.FileColumns.MIME_TYPE + " IN (?, ?, ?, ?, ?, ?, ?)");
             selectionArgs.addAll(Arrays.asList("application/pdf", "application/msword",
-											   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel",
-											   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-powerpoint",
-											   "application/vnd.openxmlformats-officedocument.presentationml.presentation"));
+                                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel",
+                                               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-powerpoint",
+                                               "application/vnd.openxmlformats-officedocument.presentationml.presentation"));
         } else if ("archives".equals(currentFilterType)) {
             selection.append(MediaStore.Files.FileColumns.MIME_TYPE + " IN (?, ?, ?, ?, ?)");
             selectionArgs.addAll(Arrays.asList("application/zip", "application/vnd.rar", "application/x-7z-compressed",
-											   "application/x-tar", "application/gzip"));
+                                               "application/x-tar", "application/gzip"));
         } else if ("other".equals(currentFilterType)) {
             selection.append(MediaStore.Files.FileColumns.MEDIA_TYPE + " NOT IN (?, ?, ?)");
             selectionArgs.addAll(Arrays.asList(String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE),
-											   String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO),
-											   String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO)));
+                                               String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO),
+                                               String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO)));
         }
     }
 
@@ -495,56 +485,55 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         return params;
     }
 
-
     private void fetchFolderSuggestions(final String constraint) {
         new Thread(new Runnable() {
-				@Override
-				public void run() {
-					String lastWord = constraint;
-					int lastSpaceIndex = constraint.lastIndexOf(' ');
-					if (lastSpaceIndex != -1) {
-						lastWord = constraint.substring(lastSpaceIndex + 1);
-					}
-					if (lastWord.isEmpty()) {
-						runOnUiThread(new Runnable() {
-								@Override
-								public void run() {
-									if (searchInput != null) searchInput.dismissDropDown();
-								}
-							});
-						return;
-					}
-					Set<String> folderSet = new HashSet<>();
-					Uri uri = MediaStore.Files.getContentUri("external");
-					String[] projection = {MediaStore.Files.FileColumns.DATA};
-					Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
-					if (cursor != null) {
-						int dataColumn = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
-						while (cursor.moveToNext()) {
-							String path = cursor.getString(dataColumn);
-							if (path != null) {
-								File parentFile = new File(path).getParentFile();
-								if (parentFile != null && parentFile.getName().toLowerCase().startsWith(lastWord.toLowerCase())) {
-									folderSet.add(parentFile.getName());
-								}
-							}
-						}
-						cursor.close();
-					}
-					final List<String> suggestions = new ArrayList<>(folderSet);
-					runOnUiThread(new Runnable() {
-							@Override
-							public void run() {
-								if (searchInput == null) return;
-								ArrayAdapter<String> suggestionAdapter = new ArrayAdapter<>(MassDeleteActivity.this, android.R.layout.simple_dropdown_item_1line, suggestions);
-								searchInput.setAdapter(suggestionAdapter);
-								if (!suggestions.isEmpty() && searchInput.isFocused()) {
-									searchInput.showDropDown();
-								}
-							}
-						});
-				}
-			}).start();
+            @Override
+            public void run() {
+                String lastWord = constraint;
+                int lastSpaceIndex = constraint.lastIndexOf(' ');
+                if (lastSpaceIndex != -1) {
+                    lastWord = constraint.substring(lastSpaceIndex + 1);
+                }
+                if (lastWord.isEmpty()) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (searchInput != null) searchInput.dismissDropDown();
+                        }
+                    });
+                    return;
+                }
+                Set<String> folderSet = new HashSet<>();
+                Uri uri = MediaStore.Files.getContentUri("external");
+                String[] projection = {MediaStore.Files.FileColumns.DATA};
+                Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
+                if (cursor != null) {
+                    int dataColumn = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
+                    while (cursor.moveToNext()) {
+                        String path = cursor.getString(dataColumn);
+                        if (path != null) {
+                            File parentFile = new File(path).getParentFile();
+                            if (parentFile != null && parentFile.getName().toLowerCase().startsWith(lastWord.toLowerCase())) {
+                                folderSet.add(parentFile.getName());
+                            }
+                        }
+                    }
+                    cursor.close();
+                }
+                final List<String> suggestions = new ArrayList<>(folderSet);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (searchInput == null) return;
+                        ArrayAdapter<String> suggestionAdapter = new ArrayAdapter<>(MassDeleteActivity.this, android.R.layout.simple_dropdown_item_1line, suggestions);
+                        searchInput.setAdapter(suggestionAdapter);
+                        if (!suggestions.isEmpty() && searchInput.isFocused()) {
+                            searchInput.showDropDown();
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     private void initiateDeletionProcess() {
@@ -613,10 +602,10 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
     private void confirmAndDelete(final List<MassDeleteAdapter.SearchResult> toDelete) {
         new AlertDialog.Builder(this).setTitle("Confirm Action")
-			.setMessage("Choose an action for the " + toDelete.size() + " selected file(s).")
-			.setPositiveButton("Delete Permanently", new DialogInterface.OnClickListener() {
-				@Override
-				public void onClick(DialogInterface dialog, int which) {
+            .setMessage("Choose an action for the " + toDelete.size() + " selected file(s).")
+            .setPositiveButton("Delete Permanently", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
                     final String[] batchOptions = {"50", "100", "500", "1000", "Max (All at once)"};
                     final int[] batchValues = {50, 100, 500, 1000, 100000};
 
@@ -628,8 +617,8 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                                 performDelete(toDelete, batchValues[index]);
                             }
                         }).show();
-				}
-			})
+                }
+            })
             .setNeutralButton("Move to Recycle", new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
@@ -650,7 +639,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                     hideFiles(toDelete);
                 }
             })
-			.show();
+            .show();
     }
 
     private void hideFiles(List<MassDeleteAdapter.SearchResult> resultsToHide) {
@@ -687,9 +676,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
             return;
         }
 
-        // LOAD BRIDGE to prevent crash
         FileBridge.mFilesToDelete = filePathsToDelete;
-
         startDeleteService(batchSize);
     }
 
@@ -748,7 +735,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
         if (requestCode == 1001) { 
             if (resultCode == Activity.RESULT_OK && mPendingFilePathsToDelete != null) {
-                // Not used anymore due to Bridge setup, but kept for compatibility
                 FileBridge.mFilesToDelete = mPendingFilePathsToDelete;
                 startDeleteService(mPendingBatchSize);
             } else {
@@ -763,7 +749,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 Uri treeUri = data.getData();
                 if (treeUri != null) {
                     getContentResolver().takePersistableUriPermission(treeUri,
-																	  Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
                     StorageUtils.saveSdCardUri(this, treeUri);
 
@@ -787,19 +773,19 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         PopupMenu popup = new PopupMenu(this, v);
         popup.getMenuInflater().inflate(R.menu.filter_menu, popup.getMenu());
         popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-				@Override
-				public boolean onMenuItemClick(MenuItem item) {
-					int itemId = item.getItemId();
-					if (itemId == R.id.filter_all) currentFilterType = "all";
-					else if (itemId == R.id.filter_images) currentFilterType = "images";
-					else if (itemId == R.id.filter_videos) currentFilterType = "videos";
-					else if (itemId == R.id.filter_documents) currentFilterType = "documents";
-					else if (itemId == R.id.filter_archives) currentFilterType = "archives";
-					else if (itemId == R.id.filter_other) currentFilterType = "other";
-					executeQuery(searchInput.getText().toString());
-					return true;
-				}
-			});
+            @Override
+            public boolean onMenuItemClick(MenuItem item) {
+                int itemId = item.getItemId();
+                if (itemId == R.id.filter_all) currentFilterType = "all";
+                else if (itemId == R.id.filter_images) currentFilterType = "images";
+                else if (itemId == R.id.filter_videos) currentFilterType = "videos";
+                else if (itemId == R.id.filter_documents) currentFilterType = "documents";
+                else if (itemId == R.id.filter_archives) currentFilterType = "archives";
+                else if (itemId == R.id.filter_other) currentFilterType = "other";
+                executeQuery(searchInput.getText().toString());
+                return true;
+            }
+        });
         popup.show();
     }
 
@@ -820,7 +806,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         }
         adapter.notifyItemRangeChanged(min, max - min + 1);
     }
-
 
     private static class QueryParameters {
         String folderPath;
@@ -844,7 +829,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         }
     }
 
-	private void setupBroadcastReceivers() {
+    private void setupBroadcastReceivers() {
         deleteCompletionReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -925,12 +910,12 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         moveButton.setVisibility(View.GONE);
 
         detailsButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					showDetailsDialog(selectedFiles);
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                showDetailsDialog(selectedFiles);
+                dialog.dismiss();
+            }
+        });
         
         sendToDropZoneButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -945,49 +930,49 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         });
 
         compressButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					if (!selectedFiles.isEmpty() && selectedFiles.get(0).getParentFile() != null) {
-						ArchiveUtils.startCompression(MassDeleteActivity.this, selectedFiles, selectedFiles.get(0).getParentFile());
-						Toast.makeText(MassDeleteActivity.this, "Compression started in background.", Toast.LENGTH_SHORT).show();
-					} else {
-						Toast.makeText(MassDeleteActivity.this, "Cannot determine destination for archive.", Toast.LENGTH_SHORT).show();
-					}
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                if (!selectedFiles.isEmpty() && selectedFiles.get(0).getParentFile() != null) {
+                    ArchiveUtils.startCompression(MassDeleteActivity.this, selectedFiles, selectedFiles.get(0).getParentFile());
+                    Toast.makeText(MassDeleteActivity.this, "Compression started in background.", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(MassDeleteActivity.this, "Cannot determine destination for archive.", Toast.LENGTH_SHORT).show();
+                }
+                dialog.dismiss();
+            }
+        });
 
         hideButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					hideFiles(selectedResults);
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                hideFiles(selectedResults);
+                dialog.dismiss();
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					initiateDeletionProcess();
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                initiateDeletionProcess();
+                dialog.dismiss();
+            }
+        });
 
         recycleButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-                    AlertDialog.Builder binBuilder = new AlertDialog.Builder(MassDeleteActivity.this);
-                    binBuilder.setTitle("Choose Recycle Bin");
-                    binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int whichBin) {
-                            new MoveToRecycleTask(selectedResults, whichBin == 1).execute();
-                        }
-                    });
-                    binBuilder.show();
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                AlertDialog.Builder binBuilder = new AlertDialog.Builder(MassDeleteActivity.this);
+                binBuilder.setTitle("Choose Recycle Bin");
+                binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int whichBin) {
+                        new MoveToRecycleTask(selectedResults, whichBin == 1).execute();
+                    }
+                });
+                binBuilder.show();
+                dialog.dismiss();
+            }
+        });
 
         dialog.show();
     }
@@ -1042,28 +1027,28 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         moreButton.setEnabled(ApiKeyManager.getApiKey(this) != null && isConnected);
 
         moreButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					analyzer.analyze(files);
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                analyzer.analyze(files);
+            }
+        });
 
         copyButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-					ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
-					clipboard.setPrimaryClip(clip);
-					Toast.makeText(MassDeleteActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(MassDeleteActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
 
         dialog.show();
     }
@@ -1167,18 +1152,21 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
             }
 
             List<MassDeleteAdapter.SearchResult> movedResults = new ArrayList<>();
+            List<String> purgedSourcePaths = new ArrayList<>();
+
             for (MassDeleteAdapter.SearchResult result : resultsToMove) {
                 File sourceFile = getFileFromResult(result);
                 if (sourceFile != null && sourceFile.exists()) {
                     boolean moveSuccess = false;
+                    File destFile = null;
                     
                     if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
                          if (cachedSdRecycleBin != null && StorageUtils.moveFileOnSdCardSafely(context, sourceFile, cachedSdRecycleBin)) {
                              moveSuccess = true;
                          }
                     } else {
-                        File destFile = new File(recycleBinDir, sourceFile.getName());
-                         if (destFile.exists()) {
+                        destFile = new File(recycleBinDir, sourceFile.getName());
+                        if (destFile.exists()) {
                             String name = sourceFile.getName();
                             String extension = "";
                             int dotIndex = name.lastIndexOf(".");
@@ -1212,9 +1200,19 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
                     if (moveSuccess) {
                         movedResults.add(result);
+                        purgedSourcePaths.add(sourceFile.getAbsolutePath());
+                        if (destFile != null) {
+                            MediaStoreUtils.scanNewPath(context, destFile);
+                        }
                     }
                 }
             }
+
+            // Immediately purge source paths from system MediaStore DB to fix Glitch 1
+            if (!purgedSourcePaths.isEmpty()) {
+                MediaStoreUtils.purgePathsFromMediaStore(context, purgedSourcePaths);
+            }
+
             return movedResults;
         }
 
