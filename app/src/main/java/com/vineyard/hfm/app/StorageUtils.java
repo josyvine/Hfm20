@@ -4,18 +4,22 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.UriPermission;
 import android.net.Uri;
 import android.os.Build;
 import android.os.storage.StorageManager;
 import android.os.storage.StorageVolume;
 import android.provider.DocumentsContract;
 import android.util.Log;
+
 import androidx.documentfile.provider.DocumentFile;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.List;
 
 public class StorageUtils {
 
@@ -31,7 +35,11 @@ public class StorageUtils {
 
     public static void saveSdCardUri(Context context, Uri uri) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putString(KEY_SDCARD_URI, uri.toString()).apply();
+        if (uri != null) {
+            prefs.edit().putString(KEY_SDCARD_URI, uri.toString()).apply();
+        } else {
+            prefs.edit().remove(KEY_SDCARD_URI).apply();
+        }
     }
 
     public static Uri getSdCardUri(Context context) {
@@ -46,11 +54,26 @@ public class StorageUtils {
     public static boolean hasSdCardPermission(Context context) {
         Uri sdCardUri = getSdCardUri(context);
         if (sdCardUri == null) return false;
+
         try {
-            int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
-            context.getContentResolver().takePersistableUriPermission(sdCardUri, takeFlags);
+            // Verify against system's persisted URI permissions to prevent stale SharedPreferences hangs
+            List<UriPermission> persistedPermissions = context.getContentResolver().getPersistedUriPermissions();
+            boolean hasPersistedGrant = false;
+            for (UriPermission perm : persistedPermissions) {
+                if (perm.getUri().equals(sdCardUri) && perm.isWritePermission()) {
+                    hasPersistedGrant = true;
+                    break;
+                }
+            }
+
+            if (!hasPersistedGrant) {
+                // Try taking persistable permissions as a fallback
+                int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                context.getContentResolver().takePersistableUriPermission(sdCardUri, takeFlags);
+            }
             return true;
         } catch (SecurityException e) {
+            Log.e(TAG, "SD Card URI permission was revoked or invalid.", e);
             saveSdCardUri(context, null);
             return false;
         }
@@ -147,7 +170,7 @@ public class StorageUtils {
         }
 
         File[] storageVolumes = context.getExternalFilesDirs(null);
-        if (storageVolumes.length > 1 && storageVolumes[1] != null) {
+        if (storageVolumes != null && storageVolumes.length > 1 && storageVolumes[1] != null) {
             String fullPath = storageVolumes[1].getAbsolutePath();
             if (fullPath.contains("/Android/data")) {
                 try {
@@ -162,26 +185,50 @@ public class StorageUtils {
         return null;
     }
 
+    /**
+     * FAST SAF DOCUMENT FILE RESOLVER
+     * Avoids recursive findFile() loops which cause severe freezing during recycling operations.
+     */
     public static DocumentFile getDocumentFile(Context context, File file, boolean isDirectory) {
         String sdCardPath = getSdCardPath(context);
-        if (sdCardPath == null) return null;
+        if (sdCardPath == null || file == null) return null;
 
         Uri sdCardUri = getSdCardUri(context);
         if (sdCardUri == null) return null;
 
-        DocumentFile rootDocFile = DocumentFile.fromTreeUri(context, sdCardUri);
-        if (rootDocFile == null) return null;
-
-        String relativePath;
+        String canonicalFilePath;
         try {
-            String canonicalFilePath = file.getCanonicalPath();
+            canonicalFilePath = file.getCanonicalPath();
             if (!canonicalFilePath.startsWith(sdCardPath)) return null;
-            relativePath = canonicalFilePath.substring(sdCardPath.length());
         } catch (IOException e) {
             return null;
         }
 
-        if (relativePath.startsWith(File.separator)) relativePath = relativePath.substring(1);
+        String relativePath = canonicalFilePath.substring(sdCardPath.length());
+        if (relativePath.startsWith(File.separator)) {
+            relativePath = relativePath.substring(1);
+        }
+
+        // Fast Direct Document URI Construction (Android 5.0 / API 21+)
+        try {
+            String treeDocumentId = DocumentsContract.getTreeDocumentId(sdCardUri);
+            String targetDocumentId = treeDocumentId + (treeDocumentId.endsWith(":") ? "" : "/") + relativePath;
+
+            Uri directDocumentUri = DocumentsContract.buildDocumentUriUsingTree(sdCardUri, targetDocumentId);
+            DocumentFile directDocFile = isDirectory ? 
+                    DocumentFile.fromTreeUri(context, directDocumentUri) : 
+                    DocumentFile.fromSingleUri(context, directDocumentUri);
+
+            if (directDocFile != null && directDocFile.exists()) {
+                return directDocFile;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Direct SAF URI construction failed, falling back to segment traversal", e);
+        }
+
+        // Fallback: Segment traversal (used if direct URI construction is unsupported on specific OEM ROMs)
+        DocumentFile rootDocFile = DocumentFile.fromTreeUri(context, sdCardUri);
+        if (rootDocFile == null) return null;
 
         String[] pathSegments = relativePath.split(File.separator);
         DocumentFile result = rootDocFile;
@@ -257,9 +304,29 @@ public class StorageUtils {
         }
     }
 
+    /**
+     * OPTIMIZED SD CARD RECYCLE BIN RESOLVER
+     * Instantly resolves/creates the SD Card Recycle Bin without scanning the entire root directory.
+     */
     public static DocumentFile getOrCreateSdCardRecycleBin(Context context) {
         Uri sdCardUri = getSdCardUri(context);
         if (sdCardUri == null) return null;
+
+        String sdCardPath = getSdCardPath(context);
+        if (sdCardPath == null) return null;
+
+        File recycleBinDir = new File(sdCardPath, SD_RECYCLE_BIN_NAME);
+        if (!recycleBinDir.exists()) {
+            recycleBinDir.mkdirs();
+        }
+
+        // Try direct URI resolution first to eliminate findFile() scanning lag
+        DocumentFile directBinDoc = getDocumentFile(context, recycleBinDir, true);
+        if (directBinDoc != null && directBinDoc.exists()) {
+            return directBinDoc;
+        }
+
+        // Fallback to tree root creation
         DocumentFile rootDocFile = DocumentFile.fromTreeUri(context, sdCardUri);
         if (rootDocFile == null) return null;
         DocumentFile recycleBin = rootDocFile.findFile(SD_RECYCLE_BIN_NAME);
@@ -272,11 +339,11 @@ public class StorageUtils {
     public static boolean moveFileOnSdCardSafely(Context context, File sourceFile, DocumentFile recycleBinDoc) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             try {
-                DocumentFile sourceDoc = getDocumentFile(context, sourceFile, false);
+                DocumentFile sourceDoc = getDocumentFile(context, sourceFile, sourceFile.isDirectory());
                 if (sourceDoc != null && recycleBinDoc != null) {
                     try {
                         Uri movedUri = DocumentsContract.moveDocument(context.getContentResolver(), 
-                                sourceDoc.getUri(), sourceDoc.getParentFile().getUri(), recycleBinDoc.getUri());
+                                sourceDoc.getUri(), sourceDoc.getParentFile() != null ? sourceDoc.getParentFile().getUri() : recycleBinDoc.getUri(), recycleBinDoc.getUri());
                         return movedUri != null;
                     } catch (Exception e) {
                         Log.w(TAG, "Native moveDocument failed, attempting rename fallback", e);
