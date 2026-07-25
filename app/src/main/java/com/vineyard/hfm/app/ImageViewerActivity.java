@@ -101,50 +101,50 @@ public class ImageViewerActivity extends Activity {
 
     private void setupListeners() {
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					onBackPressed();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                onBackPressed();
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					showFileActionDialog();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                showFileActionDialog();
+            }
+        });
 
         prevButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					if (mCurrentIndex > 0) {
-						loadImage(mCurrentIndex - 1);
-					}
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                if (mCurrentIndex > 0) {
+                    loadImage(mCurrentIndex - 1);
+                }
+            }
+        });
 
         nextButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					if (mCurrentIndex < mFilePaths.size() - 1) {
-						loadImage(mCurrentIndex + 1);
-					}
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                if (mCurrentIndex < mFilePaths.size() - 1) {
+                    loadImage(mCurrentIndex + 1);
+                }
+            }
+        });
 
         shareButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					shareFile();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                shareFile();
+            }
+        });
 
         openWithButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					openWith();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                openWith();
+            }
+        });
     }
 
     private void loadImage(int index) {
@@ -170,38 +170,38 @@ public class ImageViewerActivity extends Activity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Choose an action");
         builder.setItems(options, new DialogInterface.OnClickListener() {
-				@Override
-				public void onClick(DialogInterface dialog, int which) {
-					switch (which) {
-						case 0: // Details
-							showDetailsDialog();
-							break;
-                        case 1: // Send to Drop Zone
-                            showSendToDropDialog(new File(mFilePaths.get(mCurrentIndex)));
-                            break;
-						case 2: // Compress
-							compressFile();
-							break;
-						case 3: // Hide
-							hideFile();
-							break;
-						case 4: // Move to Recycle Bin (Dual Logic)
-                            AlertDialog.Builder binBuilder = new AlertDialog.Builder(ImageViewerActivity.this);
-                            binBuilder.setTitle("Choose Recycle Bin");
-                            binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialogInterface, int whichBin) {
-                                    moveToRecycleBin(whichBin == 1);
-                                }
-                            });
-                            binBuilder.show();
-							break;
-						case 5: // Delete Permanently (Batch Size 1)
-							performFileDeletion();
-							break;
-					}
-				}
-			});
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                switch (which) {
+                    case 0: // Details
+                        showDetailsDialog();
+                        break;
+                    case 1: // Send to Drop Zone
+                        showSendToDropDialog(new File(mFilePaths.get(mCurrentIndex)));
+                        break;
+                    case 2: // Compress
+                        compressFile();
+                        break;
+                    case 3: // Hide
+                        hideFile();
+                        break;
+                    case 4: // Move to Recycle Bin (Dual Logic)
+                        AlertDialog.Builder binBuilder = new AlertDialog.Builder(ImageViewerActivity.this);
+                        binBuilder.setTitle("Choose Recycle Bin");
+                        binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int whichBin) {
+                                moveToRecycleBin(whichBin == 1);
+                            }
+                        });
+                        binBuilder.show();
+                        break;
+                    case 5: // Delete Permanently (Batch Size 1)
+                        performFileDeletion();
+                        break;
+                }
+            }
+        });
         builder.show();
     }
 
@@ -239,28 +239,28 @@ public class ImageViewerActivity extends Activity {
         moreButton.setEnabled(ApiKeyManager.getApiKey(this) != null && isConnected);
 
         moreButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					analyzer.analyze(files);
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                analyzer.analyze(files);
+            }
+        });
 
         copyButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-					ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
-					clipboard.setPrimaryClip(clip);
-					Toast.makeText(ImageViewerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(ImageViewerActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					dialog.dismiss();
-				}
-			});
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
 
         dialog.show();
     }
@@ -363,7 +363,6 @@ public class ImageViewerActivity extends Activity {
         }
     }
 
-
     private void moveToRecycleBin(boolean useSdCardBin) {
         String filePath = mFilePaths.get(mCurrentIndex);
         File sourceFile = new File(filePath);
@@ -373,9 +372,9 @@ public class ImageViewerActivity extends Activity {
         }
 
         boolean moveSuccess = false;
+        File destFile = null;
         
         if (useSdCardBin && StorageUtils.isFileOnSdCard(this, sourceFile)) {
-            // Enhancement 2: SD Card SAF Move
             if (StorageUtils.moveFileOnSdCardSafely(this, sourceFile)) {
                 moveSuccess = true;
             } else {
@@ -384,7 +383,6 @@ public class ImageViewerActivity extends Activity {
         }
         
         if (!moveSuccess) {
-            // Existing logic: Move to Phone Internal Storage bin
             File recycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
             if (!recycleBinDir.exists()) {
                 if (!recycleBinDir.mkdir()) {
@@ -393,7 +391,7 @@ public class ImageViewerActivity extends Activity {
                 }
             }
 
-            File destFile = new File(recycleBinDir, sourceFile.getName());
+            destFile = new File(recycleBinDir, sourceFile.getName());
             if (destFile.exists()) {
                 String name = sourceFile.getName();
                 String extension = "";
@@ -407,13 +405,10 @@ public class ImageViewerActivity extends Activity {
 
             if (sourceFile.renameTo(destFile)) {
                 moveSuccess = true;
-                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
             } else {
-                // Fallback copy-delete
                 if (StorageUtils.copyFile(this, sourceFile, destFile)) {
                     if (StorageUtils.deleteFile(this, sourceFile)) {
                         moveSuccess = true;
-                        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(destFile)));
                     } else {
                         destFile.delete();
                     }
@@ -424,8 +419,14 @@ public class ImageViewerActivity extends Activity {
         if (moveSuccess) {
             Toast.makeText(this, "File moved to Recycle Bin.", Toast.LENGTH_SHORT).show();
             mFileDeleted = true;
+
+            // Immediately purge source path from MediaStore DB to fix Glitch 1
+            MediaStoreUtils.purgePathFromMediaStore(this, sourceFile.getAbsolutePath());
+            if (destFile != null) {
+                MediaStoreUtils.scanNewPath(this, destFile);
+            }
+
             mFilePaths.remove(mCurrentIndex);
-            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(sourceFile)));
 
             if (mFilePaths.isEmpty()) {
                 onBackPressed();
@@ -450,7 +451,7 @@ public class ImageViewerActivity extends Activity {
 
         Intent intent = new Intent(this, DeleteService.class);
         intent.putStringArrayListExtra(DeleteService.EXTRA_FILES_TO_DELETE, filesToDelete);
-        intent.putExtra("batch_size", 1); // Enhancement 4: batch size 1
+        intent.putExtra("batch_size", 1);
         ContextCompat.startForegroundService(this, intent);
     }
 
@@ -530,7 +531,7 @@ public class ImageViewerActivity extends Activity {
                         loadImage(mCurrentIndex);
                     }
                 } else {
-					Toast.makeText(ImageViewerActivity.this, "Failed to delete the file.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ImageViewerActivity.this, "Failed to delete the file.", Toast.LENGTH_SHORT).show();
                 }
             }
         };
@@ -545,7 +546,7 @@ public class ImageViewerActivity extends Activity {
         LocalBroadcastManager.getInstance(this).registerReceiver(compressionBroadcastReceiver, new IntentFilter(CompressionService.ACTION_COMPRESSION_COMPLETE));
     }
 
-	@Override
+    @Override
     protected void onDestroy() {
         if (deleteCompletionReceiver != null) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(deleteCompletionReceiver);
