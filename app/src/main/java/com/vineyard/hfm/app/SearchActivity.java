@@ -45,6 +45,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 
 import androidx.core.content.ContextCompat;
+import androidx.documentfile.provider.DocumentFile;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -191,73 +192,73 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
 
     private void setupListeners() {
         closeButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        finish();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                finish();
+            }
+        });
 
         filterButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        showFilterMenu(v);
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                showFilterMenu(v);
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        showFileOperationsDialog();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                showFileOperationsDialog();
+            }
+        });
 
         searchInput.addTextChangedListener(new TextWatcher() {
-                                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-                                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                                        fetchFolderSuggestions(s.toString());
-                                }
-                                @Override public void afterTextChanged(Editable s) {}
-                        });
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                fetchFolderSuggestions(s.toString());
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
 
         searchInput.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-                                @Override
-                                public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                                        String suggestion = (String) parent.getItemAtPosition(position);
-                                        String currentText = searchInput.getText().toString();
-                                        int lastSpaceIndex = currentText.lastIndexOf(' ');
-                                        String newText = (lastSpaceIndex != -1) ? currentText.substring(0, lastSpaceIndex + 1) + suggestion + " " : suggestion + " ";
-                                        searchInput.setText(newText);
-                                        searchInput.setSelection(newText.length());
-                                }
-                        });
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                String suggestion = (String) parent.getItemAtPosition(position);
+                String currentText = searchInput.getText().toString();
+                int lastSpaceIndex = currentText.lastIndexOf(' ');
+                String newText = (lastSpaceIndex != -1) ? currentText.substring(0, lastSpaceIndex + 1) + suggestion + " " : suggestion + " ";
+                searchInput.setText(newText);
+                searchInput.setSelection(newText.length());
+            }
+        });
 
         searchInput.setOnEditorActionListener(new TextView.OnEditorActionListener() {
-                                @Override
-                                public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-                                        executeQuery(searchInput.getText().toString());
-                                        InputMethodManager imm = (InputMethodManager) getSystemService(Activity.INPUT_METHOD_SERVICE);
-                                        if (imm != null) {
-                                                imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
-                                        }
-                                        return true;
-                                }
-                        });
+            @Override
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                executeQuery(searchInput.getText().toString());
+                InputMethodManager imm = (InputMethodManager) getSystemService(Activity.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                }
+                return true;
+            }
+        });
     }
 
     private void setupRecyclerView() {
         gridLayoutManager = new GridLayoutManager(this, currentSpanCount);
 
         gridLayoutManager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
-                                @Override
-                                public int getSpanSize(int position) {
-                                        if (position >= 0 && position < displayList.size()) {
-                                                if (displayList.get(position) instanceof DateHeader) {
-                                                        return currentSpanCount;
-                                                }
-                                        }
-                                        return 1;
-                                }
-                        });
+            @Override
+            public int getSpanSize(int position) {
+                if (position >= 0 && position < displayList.size()) {
+                    if (displayList.get(position) instanceof DateHeader) {
+                        return currentSpanCount;
+                    }
+                }
+                return 1;
+            }
+        });
 
         searchResultsGrid.setLayoutManager(gridLayoutManager);
         adapter = new SearchAdapter(this, displayList, this, this, this);
@@ -267,50 +268,50 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
     private void setupPinchToZoom() {
         scaleGestureDetector = new ScaleGestureDetector(this, new PinchZoomListener());
         searchResultsGrid.setOnTouchListener(new View.OnTouchListener() {
-                                @Override
-                                public boolean onTouch(View v, MotionEvent event) {
-                                        scaleGestureDetector.onTouchEvent(event);
-                                        return false;
-                                }
-                        });
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                scaleGestureDetector.onTouchEvent(event);
+                return false;
+            }
+        });
     }
 
     private void executeQuery(final String query) {
         searchExecutor.execute(new Runnable() {
-                                @Override
-                                public void run() {
-                                        final QueryParameters params = parseQuery(query);
-                                        List<SearchResult> mediaStoreResults = executeQueryWithMediaStore(params);
+            @Override
+            public void run() {
+                final QueryParameters params = parseQuery(query);
+                List<SearchResult> mediaStoreResults = executeQueryWithMediaStore(params);
 
-                                        if (!mediaStoreResults.isEmpty()) {
-                                                updateUIWithResults(mediaStoreResults);
-                                        } else {
-                                                runOnUiThread(new Runnable() {
-                                                                @Override
-                                                                public void run() {
-                                                                        Toast.makeText(SearchActivity.this, "MediaStore found nothing. Starting deep scan...", Toast.LENGTH_SHORT).show();
-                                                                }
-                                                        });
-                                                List<SearchResult> fileSystemResults = performFallbackFileSearch(params);
-                                                updateUIWithResults(fileSystemResults);
-                                        }
-                                }
-                        });
+                if (!mediaStoreResults.isEmpty()) {
+                    updateUIWithResults(mediaStoreResults);
+                } else {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(SearchActivity.this, "MediaStore found nothing. Starting deep scan...", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                    List<SearchResult> fileSystemResults = performFallbackFileSearch(params);
+                    updateUIWithResults(fileSystemResults);
+                }
+            }
+        });
     }
 
     private void updateUIWithResults(final List<SearchResult> results) {
         final List<Object> groupedList = processAndGroupResults(results);
         runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                        masterList.clear();
-                                        masterList.addAll(groupedList);
-                    rebuildDisplayList();
-                                        if (results.isEmpty()) {
-                                                Toast.makeText(SearchActivity.this, "No files found.", Toast.LENGTH_SHORT).show();
-                                        }
-                                }
-                        });
+            @Override
+            public void run() {
+                masterList.clear();
+                masterList.addAll(groupedList);
+                rebuildDisplayList();
+                if (results.isEmpty()) {
+                    Toast.makeText(SearchActivity.this, "No files found.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 
     private void rebuildDisplayList() {
@@ -416,9 +417,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                         contentUri = ContentUris.withAppendedId(queryUri, id);
                     }
 
-                    // --- DATE ISSUE FIX START ---
-                    // Android MediaStore often holds old metadata dates.
-                    // We check the actual Filesystem date and use the most recent one.
                     long lastModifiedMillis = dateModifiedSeconds * 1000;
                     if (path != null) {
                         File actualFile = new File(path);
@@ -429,7 +427,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                             }
                         }
                     }
-                    // --- DATE ISSUE FIX END ---
 
                     results.add(new SearchResult(contentUri, id, lastModifiedMillis, displayName, path));
                 }
@@ -483,11 +480,11 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         }
 
         Collections.sort(results, new Comparator<SearchResult>() {
-                                @Override
-                                public int compare(SearchResult f1, SearchResult f2) {
-                                        return Long.compare(f2.getLastModifiedForGrouping(), f1.getLastModifiedForGrouping());
-                                }
-                        });
+            @Override
+            public int compare(SearchResult f1, SearchResult f2) {
+                return Long.compare(f2.getLastModifiedForGrouping(), f1.getLastModifiedForGrouping());
+            }
+        });
         return results;
     }
 
@@ -526,18 +523,18 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         } else if ("documents".equals(currentFilterType)) {
             selection.append(MediaStore.Files.FileColumns.MIME_TYPE + " IN (?, ?, ?, ?, ?, ?, ?)");
             selectionArgs.addAll(Arrays.asList("application/pdf", "application/msword",
-                                                                                           "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel",
-                                                                                           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-powerpoint",
-                                                                                           "application/vnd.openxmlformats-officedocument.presentationml.presentation"));
+                                               "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-excel",
+                                               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-powerpoint",
+                                               "application/vnd.openxmlformats-officedocument.presentationml.presentation"));
         } else if ("archives".equals(currentFilterType)) {
             selection.append(MediaStore.Files.FileColumns.MIME_TYPE + " IN (?, ?, ?, ?, ?)");
             selectionArgs.addAll(Arrays.asList("application/zip", "application/vnd.rar", "application/x-7z-compressed",
-                                                                                           "application/x-tar", "application/gzip"));
+                                               "application/x-tar", "application/gzip"));
         } else if ("other".equals(currentFilterType)) {
             selection.append(MediaStore.Files.FileColumns.MEDIA_TYPE + " NOT IN (?, ?, ?)");
             selectionArgs.addAll(Arrays.asList(String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE),
-                                                                                           String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO),
-                                                                                           String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO)));
+                                               String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO),
+                                               String.valueOf(MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO)));
         }
     }
 
@@ -802,7 +799,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
     }
 
     private void initiateDeletionProcess() {
-        // UPDATE: Fix Crash by moving heavy file pre-check to background task
         new PreDeletionCheckTask().execute();
     }
 
@@ -823,7 +819,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
             List<SearchResult> selectedResults = new ArrayList<>();
             boolean requiresSdCardPermission = false;
             
-            // OPTIMIZATION: O(1) Lookup Map to kill the 1-minute freezing loop
             java.util.HashMap<String, List<SearchResult>> dirMap = new java.util.HashMap<>();
 
             for (Object item : masterList) {
@@ -851,7 +846,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
 
             if (selectedResults.isEmpty()) return null;
 
-            // High-speed sibling check
             Set<SearchResult> masterDeleteSet = new HashSet<>();
             for (SearchResult selected : selectedResults) {
                 masterDeleteSet.add(selected);
@@ -917,10 +911,10 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         }
 
         new AlertDialog.Builder(this).setTitle("Confirm Action")
-                        .setMessage(Html.fromHtml(dialogMessage))
-                        .setPositiveButton("Delete All", new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
+            .setMessage(Html.fromHtml(dialogMessage))
+            .setPositiveButton("Delete All", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
                     final String[] batchOptions = {"50", "100", "500", "1000", "Max (All at once)"};
                     final int[] batchValues = {50, 100, 500, 1000, 100000};
 
@@ -932,8 +926,8 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                                 performDelete(toDelete, batchValues[index]);
                             }
                         }).show();
-                                }
-                        })
+                }
+            })
             .setNeutralButton("Move to Recycle", new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
@@ -954,7 +948,7 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                     hideFiles(toDelete);
                 }
             })
-                        .show();
+            .show();
     }
 
     private void hideFiles(List<SearchResult> resultsToHide) {
@@ -974,7 +968,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         intent.putExtra(RitualRecordTapsActivity.EXTRA_FILES_TO_HIDE, (Serializable) filesToHide);
         startActivity(intent);
     }
-
 
     private void moveToRecycleBin(List<SearchResult> resultsToMove, boolean useSdCardBin) {
         new MoveToRecycleTask(resultsToMove, useSdCardBin).execute();
@@ -1028,9 +1021,7 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
             return;
         }
 
-        // LOAD BRIDGE to prevent crash
         FileBridge.mFilesToDelete = filePathsToDelete;
-
         startDeleteService(batchSize);
     }
     
@@ -1064,7 +1055,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
 
         if (requestCode == 1001) { 
             if (resultCode == Activity.RESULT_OK && mPendingFilePathsToDelete != null) {
-                // Not used anymore due to Bridge setup, but kept for compatibility
                 FileBridge.mFilesToDelete = mPendingFilePathsToDelete;
                 startDeleteService(mPendingBatchSize);
             } else {
@@ -1079,7 +1069,7 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                 Uri treeUri = data.getData();
                 if (treeUri != null) {
                     getContentResolver().takePersistableUriPermission(treeUri,
-                                                                                                                                          Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
                     StorageUtils.saveSdCardUri(this, treeUri);
                     Toast.makeText(this, "SD card access granted.", Toast.LENGTH_SHORT).show();
@@ -1102,24 +1092,24 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         PopupMenu popup = new PopupMenu(this, v);
         popup.getMenuInflater().inflate(R.menu.filter_menu, popup.getMenu());
         popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-                                @Override
-                                public boolean onMenuItemClick(MenuItem item) {
-                                        int itemId = item.getItemId();
-                                        if (itemId == R.id.filter_all) currentFilterType = "all";
-                                        else if (itemId == R.id.filter_images) currentFilterType = "images";
-                                        else if (itemId == R.id.filter_videos) currentFilterType = "videos";
-                                        else if (itemId == R.id.filter_documents) currentFilterType = "documents";
-                                        else if (itemId == R.id.filter_archives) currentFilterType = "archives";
-                                        else if (itemId == R.id.filter_other) currentFilterType = "other";
+            @Override
+            public boolean onMenuItemClick(MenuItem item) {
+                int itemId = item.getItemId();
+                if (itemId == R.id.filter_all) currentFilterType = "all";
+                else if (itemId == R.id.filter_images) currentFilterType = "images";
+                else if (itemId == R.id.filter_videos) currentFilterType = "videos";
+                else if (itemId == R.id.filter_documents) currentFilterType = "documents";
+                else if (itemId == R.id.filter_archives) currentFilterType = "archives";
+                else if (itemId == R.id.filter_other) currentFilterType = "other";
 
-                    masterList.clear();
-                    displayList.clear();
-                    adapter.updateData(displayList);
+                masterList.clear();
+                displayList.clear();
+                adapter.updateData(displayList);
 
-                                        executeQuery(searchInput.getText().toString());
-                                        return true;
-                                }
-                        });
+                executeQuery(searchInput.getText().toString());
+                return true;
+            }
+        });
         popup.show();
     }
 
@@ -1300,12 +1290,12 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         moveButton.setVisibility(View.GONE);
 
         detailsButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        showDetailsDialog(selectedFiles);
-                                        dialog.dismiss();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                showDetailsDialog(selectedFiles);
+                dialog.dismiss();
+            }
+        });
 
         sendToDropZoneButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -1320,49 +1310,49 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         });
 
         compressButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        if (!selectedFiles.isEmpty() && selectedFiles.get(0).getParentFile() != null) {
-                                                ArchiveUtils.startCompression(SearchActivity.this, selectedFiles, selectedFiles.get(0).getParentFile());
-                                                Toast.makeText(SearchActivity.this, "Compression started in background.", Toast.LENGTH_SHORT).show();
-                                        } else {
-                                                Toast.makeText(SearchActivity.this, "Cannot determine destination for archive.", Toast.LENGTH_SHORT).show();
-                                        }
-                                        dialog.dismiss();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                if (!selectedFiles.isEmpty() && selectedFiles.get(0).getParentFile() != null) {
+                    ArchiveUtils.startCompression(SearchActivity.this, selectedFiles, selectedFiles.get(0).getParentFile());
+                    Toast.makeText(SearchActivity.this, "Compression started in background.", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(SearchActivity.this, "Cannot determine destination for archive.", Toast.LENGTH_SHORT).show();
+                }
+                dialog.dismiss();
+            }
+        });
 
         hideButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        hideFiles(selectedResults);
-                                        dialog.dismiss();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                hideFiles(selectedResults);
+                dialog.dismiss();
+            }
+        });
 
         deleteButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        initiateDeletionProcess();
-                                        dialog.dismiss();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                initiateDeletionProcess();
+                dialog.dismiss();
+            }
+        });
 
         recycleButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                    AlertDialog.Builder binBuilder = new AlertDialog.Builder(SearchActivity.this);
-                    binBuilder.setTitle("Choose Recycle Bin");
-                    binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialogInterface, int which) {
-                            moveToRecycleBin(selectedResults, which == 1);
-                        }
-                    });
-                    binBuilder.show();
-                    dialog.dismiss();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                AlertDialog.Builder binBuilder = new AlertDialog.Builder(SearchActivity.this);
+                binBuilder.setTitle("Choose Recycle Bin");
+                binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int which) {
+                        moveToRecycleBin(selectedResults, which == 1);
+                    }
+                });
+                binBuilder.show();
+                dialog.dismiss();
+            }
+        });
 
         dialog.show();
     }
@@ -1416,28 +1406,28 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         moreButton.setEnabled(ApiKeyManager.getApiKey(this) != null && isConnected);
 
         moreButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        analyzer.analyze(files);
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                analyzer.analyze(files);
+            }
+        });
 
         copyButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                                        ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
-                                        clipboard.setPrimaryClip(clip);
-                                        Toast.makeText(SearchActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("AI Summary", aiDetailsText.getText());
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(SearchActivity.this, "Summary copied to clipboard.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         closeButton.setOnClickListener(new View.OnClickListener() {
-                                @Override
-                                public void onClick(View v) {
-                                        dialog.dismiss();
-                                }
-                        });
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
 
         dialog.show();
     }
@@ -1531,7 +1521,7 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                     ArrayList<String> fileList = getSiblingFilesForViewer(file, category);
                     int currentIndex = fileList.indexOf(path);
                     if (currentIndex == -1) {
-                                                return null;
+                        return null;
                     }
 
                     if (category == CATEGORY_IMAGES) {
@@ -1622,25 +1612,28 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                 if (!recycleBinDir.mkdir()) return new ArrayList<>();
             }
 
-            androidx.documentfile.provider.DocumentFile cachedSdRecycleBin = null;
+            DocumentFile cachedSdRecycleBin = null;
             if (useSdCardBin) {
                 cachedSdRecycleBin = StorageUtils.getOrCreateSdCardRecycleBin(context);
             }
 
             List<SearchResult> movedResults = new ArrayList<>();
+            List<String> purgedSourcePaths = new ArrayList<>();
+
             for (SearchResult result : resultsToMove) {
                 if (result.getPath() == null) continue;
                 File sourceFile = new File(result.getPath());
                 
                 if (sourceFile.exists()) {
                     boolean moveSuccess = false;
+                    File destFile = null;
                     
                     if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
                          if (cachedSdRecycleBin != null && StorageUtils.moveFileOnSdCardSafely(context, sourceFile, cachedSdRecycleBin)) {
                              moveSuccess = true;
                          }
                     } else {
-                        File destFile = new File(recycleBinDir, sourceFile.getName());
+                        destFile = new File(recycleBinDir, sourceFile.getName());
                         if (destFile.exists()) {
                             String name = sourceFile.getName();
                             String extension = "";
@@ -1672,11 +1665,22 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                             }
                         }
                     }
+
                     if (moveSuccess) {
                         movedResults.add(result);
+                        purgedSourcePaths.add(sourceFile.getAbsolutePath());
+                        if (destFile != null) {
+                            MediaStoreUtils.scanNewPath(context, destFile);
+                        }
                     }
                 }
             }
+
+            // Immediately purge original source file paths from system MediaStore DB to fix Glitch 1
+            if (!purgedSourcePaths.isEmpty()) {
+                MediaStoreUtils.purgePathsFromMediaStore(context, purgedSourcePaths);
+            }
+
             return movedResults;
         }
 
