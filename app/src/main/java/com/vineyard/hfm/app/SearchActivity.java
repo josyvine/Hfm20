@@ -837,26 +837,18 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
             List<SearchResult> selectedResults = new ArrayList<>();
             boolean requiresSdCardPermission = false;
             
-            java.util.HashMap<String, List<SearchResult>> dirMap = new java.util.HashMap<>();
+            // Fast check: query SD Card path and permission ONCE before starting loops
+            String sdCardPath = StorageUtils.getSdCardPath(SearchActivity.this);
+            boolean hasSdPermission = StorageUtils.hasSdCardPermission(SearchActivity.this);
 
+            // Step 1: Gather ONLY user-selected items
             for (Object item : masterList) {
                 if (item instanceof SearchResult) {
                     SearchResult result = (SearchResult) item;
-                    if (result.getPath() != null) {
-                        File file = new File(result.getPath());
-                        String parentPath = file.getParent();
-                        if (parentPath != null) {
-                            if (!dirMap.containsKey(parentPath)) {
-                                dirMap.put(parentPath, new ArrayList<SearchResult>());
-                            }
-                            dirMap.get(parentPath).add(result);
-                        }
-
-                        if (!result.isExcluded()) {
-                            selectedResults.add(result);
-                            if (StorageUtils.isFileOnSdCard(SearchActivity.this, file) && !StorageUtils.hasSdCardPermission(SearchActivity.this)) {
-                                requiresSdCardPermission = true;
-                            }
+                    if (!result.isExcluded() && result.getPath() != null) {
+                        selectedResults.add(result);
+                        if (!requiresSdCardPermission && sdCardPath != null && result.getPath().startsWith(sdCardPath) && !hasSdPermission) {
+                            requiresSdCardPermission = true;
                         }
                     }
                 }
@@ -864,18 +856,56 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
 
             if (selectedResults.isEmpty()) return null;
 
+            // Step 2: Extract parent directories ONLY for selected items to build targeted directory map
+            Set<String> selectedParentPaths = new HashSet<>();
+            for (SearchResult selected : selectedResults) {
+                String path = selected.getPath();
+                int lastSlash = path.lastIndexOf('/');
+                if (lastSlash > 0) {
+                    selectedParentPaths.add(path.substring(0, lastSlash));
+                }
+            }
+
+            java.util.HashMap<String, List<SearchResult>> dirMap = new java.util.HashMap<>();
+            for (Object item : masterList) {
+                if (item instanceof SearchResult) {
+                    SearchResult result = (SearchResult) item;
+                    String path = result.getPath();
+                    if (path != null) {
+                        int lastSlash = path.lastIndexOf('/');
+                        if (lastSlash > 0) {
+                            String parentPath = path.substring(0, lastSlash);
+                            if (selectedParentPaths.contains(parentPath)) {
+                                List<SearchResult> list = dirMap.get(parentPath);
+                                if (list == null) {
+                                    list = new ArrayList<>();
+                                    dirMap.put(parentPath, list);
+                                }
+                                list.add(result);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Step 3: Match sibling files in parallel memory map
             Set<SearchResult> masterDeleteSet = new HashSet<>();
             for (SearchResult selected : selectedResults) {
                 masterDeleteSet.add(selected);
-                File originalFile = new File(selected.getPath());
-                String parentPath = originalFile.getParent();
-                Matcher matcher = FILE_BASE_NAME_PATTERN.matcher(originalFile.getName());
+                String path = selected.getPath();
+                int lastSlash = path.lastIndexOf('/');
+                String fileName = selected.getDisplayName();
+                Matcher matcher = FILE_BASE_NAME_PATTERN.matcher(fileName);
 
-                if (matcher.find() && parentPath != null && dirMap.containsKey(parentPath)) {
+                if (matcher.find() && lastSlash > 0) {
                     String baseName = matcher.group(0);
-                    for (SearchResult potentialSibling : dirMap.get(parentPath)) {
-                        if (potentialSibling.getDisplayName().startsWith(baseName)) {
-                            masterDeleteSet.add(potentialSibling);
+                    String parentPath = path.substring(0, lastSlash);
+                    List<SearchResult> dirItems = dirMap.get(parentPath);
+                    if (dirItems != null) {
+                        for (SearchResult potentialSibling : dirItems) {
+                            if (potentialSibling.getDisplayName().startsWith(baseName)) {
+                                masterDeleteSet.add(potentialSibling);
+                            }
                         }
                     }
                 }
