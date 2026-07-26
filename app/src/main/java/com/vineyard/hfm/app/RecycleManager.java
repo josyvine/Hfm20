@@ -1,0 +1,250 @@
+package com.vineyard.hfm.app;
+
+import android.app.AlertDialog;
+import android.content.ContentResolver;
+import android.content.Context;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Toast;
+
+import androidx.documentfile.provider.DocumentFile;
+
+import com.bumptech.glide.Glide;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Centralized High-Performance Recycling & MediaStore Synchronization Engine.
+ * 
+ * Fixes Glitch 1: Purges MediaStore DB entries by ID & clears Glide cache to eliminate ghost thumbnails.
+ * Fixes Glitch 2: Eliminates slow byte-copy loops & uses fast atomic SAF/rename operations.
+ * Logs diagnostic metrics directly to AppLogger (/sdcard/hfm log report/hfm_diagnostic_log.txt).
+ */
+public class RecycleManager {
+
+    private static final String TAG = "HFM_RecycleManager";
+
+    public interface RecycleCallback {
+        void onRecycleProgress(String currentFileName, int processed, int total);
+        void onRecycleComplete(List<File> successfullyMovedFiles, int totalCount);
+    }
+
+    /**
+     * Public method to execute recycling in background.
+     */
+    public static void recycleFiles(final Context context, final List<File> filesToMove, final boolean useSdCardBin, final RecycleCallback callback) {
+        new RecycleTask(context, filesToMove, useSdCardBin, callback).execute();
+    }
+
+    private static class RecycleTask extends AsyncTask<Void, String, List<File>> {
+        private final Context context;
+        private final List<File> filesToMove;
+        private final boolean useSdCardBin;
+        private final RecycleCallback callback;
+        private AlertDialog progressDialog;
+
+        RecycleTask(Context context, List<File> filesToMove, boolean useSdCardBin, RecycleCallback callback) {
+            this.context = context;
+            this.filesToMove = filesToMove;
+            this.useSdCardBin = useSdCardBin;
+            this.callback = callback;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            AppLogger.log(TAG, "========== RECYCLE BATCH STARTED ==========");
+            AppLogger.log(TAG, "Batch Size: " + filesToMove.size() + " files | Use SD Bin: " + useSdCardBin);
+
+            try {
+                AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_progress_simple, null);
+                builder.setView(dialogView);
+                builder.setCancelable(false);
+                progressDialog = builder.create();
+                progressDialog.show();
+            } catch (Exception e) {
+                AppLogger.logError(TAG, "Could not show progress dialog", e);
+            }
+        }
+
+        @Override
+        protected List<File> doInBackground(Void... voids) {
+            long totalStartTime = System.currentTimeMillis();
+            List<File> movedFiles = new ArrayList<>();
+            List<String> purgedSourcePaths = new ArrayList<>();
+
+            File phoneRecycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
+            if (!phoneRecycleBinDir.exists() && !useSdCardBin) {
+                boolean created = phoneRecycleBinDir.mkdir();
+                AppLogger.log(TAG, "Created Phone Recycle Bin directory: " + phoneRecycleBinDir.getAbsolutePath() + " -> " + created);
+            }
+
+            DocumentFile cachedSdRecycleBin = null;
+            if (useSdCardBin) {
+                long sdBinStartTime = System.currentTimeMillis();
+                cachedSdRecycleBin = StorageUtils.getOrCreateSdCardRecycleBin(context);
+                long sdBinDuration = System.currentTimeMillis() - sdBinStartTime;
+                AppLogger.logMetric(TAG, "Resolve SD Card Recycle Bin", sdBinDuration, 
+                        "Resolved Uri: " + (cachedSdRecycleBin != null ? cachedSdRecycleBin.getUri().toString() : "NULL"));
+            }
+
+            for (int i = 0; i < filesToMove.size(); i++) {
+                File sourceFile = filesToMove.get(i);
+                if (sourceFile == null || !sourceFile.exists()) {
+                    AppLogger.log(TAG, "SKIP | File does not exist on disk: " + (sourceFile != null ? sourceFile.getAbsolutePath() : "NULL"));
+                    continue;
+                }
+
+                long fileStartTime = System.currentTimeMillis();
+                boolean moveSuccess = false;
+                File destFile = null;
+                String sourcePath = sourceFile.getAbsolutePath();
+
+                publishProgress(sourceFile.getName(), String.valueOf(i + 1), String.valueOf(filesToMove.size()));
+
+                // 1. Try SD Card SAF Move
+                if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
+                    if (cachedSdRecycleBin != null && StorageUtils.moveFileOnSdCardSafely(context, sourceFile, cachedSdRecycleBin)) {
+                        moveSuccess = true;
+                        AppLogger.log(TAG, "SAF MOVE SUCCESS | " + sourcePath);
+                    } else {
+                        AppLogger.log(TAG, "SAF MOVE FAILED | " + sourcePath);
+                    }
+                } else {
+                    // 2. Try Atomic Java File Rename (Internal Phone Storage)
+                    destFile = new File(phoneRecycleBinDir, sourceFile.getName());
+                    if (destFile.exists()) {
+                        String name = sourceFile.getName();
+                        String extension = "";
+                        int dotIndex = name.lastIndexOf(".");
+                        if (dotIndex > 0 && !sourceFile.isDirectory()) {
+                            extension = name.substring(dotIndex);
+                            name = name.substring(0, dotIndex);
+                        }
+                        destFile = new File(phoneRecycleBinDir, name + "_" + System.currentTimeMillis() + extension);
+                    }
+
+                    long renameStartTime = System.currentTimeMillis();
+                    moveSuccess = sourceFile.renameTo(destFile);
+                    long renameDuration = System.currentTimeMillis() - renameStartTime;
+
+                    if (moveSuccess) {
+                        AppLogger.logMetric(TAG, "Atomic File.renameTo()", renameDuration, "Moved: " + sourcePath + " -> " + destFile.getAbsolutePath());
+                    } else {
+                        AppLogger.log(TAG, "RENAME FAILED | File.renameTo() returned false for: " + sourcePath);
+                        
+                        // Fallback: Use StorageUtils SAF Copy-Delete ONLY if on different volumes
+                        boolean isSourceOnSd = StorageUtils.isFileOnSdCard(context, sourceFile);
+                        boolean isDestOnSd = StorageUtils.isFileOnSdCard(context, destFile);
+
+                        if (isSourceOnSd && isDestOnSd) {
+                            AppLogger.log(TAG, "BLOCKED | Prevented slow byte-copy on same SD Card volume for: " + sourcePath);
+                            moveSuccess = false;
+                        } else {
+                            AppLogger.log(TAG, "FALLBACK | Attempting copy-delete fallback for cross-volume move...");
+                            long copyStartTime = System.currentTimeMillis();
+                            if (StorageUtils.copyFile(context, sourceFile, destFile)) {
+                                if (StorageUtils.deleteFile(context, sourceFile)) {
+                                    moveSuccess = true;
+                                    AppLogger.logMetric(TAG, "Fallback Copy-Delete", System.currentTimeMillis() - copyStartTime, "Moved: " + sourcePath);
+                                } else {
+                                    destFile.delete();
+                                    AppLogger.log(TAG, "FALLBACK ERROR | Failed to delete source file after copy: " + sourcePath);
+                                }
+                            } else {
+                                AppLogger.log(TAG, "FALLBACK ERROR | Copy failed for: " + sourcePath);
+                            }
+                        }
+                    }
+                }
+
+                long fileDuration = System.currentTimeMillis() - fileStartTime;
+
+                if (moveSuccess) {
+                    movedFiles.add(sourceFile);
+                    purgedSourcePaths.add(sourcePath);
+
+                    // Scan newly created destination file in recycle bin
+                    if (destFile != null) {
+                        MediaStoreUtils.scanNewPath(context, destFile);
+                    }
+                }
+
+                AppLogger.logMetric(TAG, "Item Recycle Processing", fileDuration, "Result: " + moveSuccess + " | File: " + sourcePath);
+            }
+
+            // --- CRITICAL FIX FOR GLITCH 1: PURGE MEDIASTORE DB ENTRIES BY PATH & ID ---
+            if (!purgedSourcePaths.isEmpty()) {
+                long purgeStartTime = System.currentTimeMillis();
+                MediaStoreUtils.purgePathsFromMediaStore(context, purgedSourcePaths);
+                long purgeDuration = System.currentTimeMillis() - purgeStartTime;
+                AppLogger.logMetric(TAG, "MediaStore System DB Purge", purgeDuration, "Purged " + purgedSourcePaths.size() + " path(s)");
+            }
+
+            // --- CRITICAL FIX FOR GLITCH 1: CLEAR GLIDE THUMBNAIL CACHE ---
+            try {
+                // Clear Glide disk cache on background thread
+                Glide.get(context).clearDiskCache();
+                AppLogger.log(TAG, "Glide Disk Cache cleared successfully.");
+            } catch (Exception e) {
+                AppLogger.logError(TAG, "Failed to clear Glide disk cache", e);
+            }
+
+            long totalDuration = System.currentTimeMillis() - totalStartTime;
+            AppLogger.logMetric(TAG, "FULL BATCH RECYCLE COMPLETE", totalDuration, 
+                    "Successfully moved " + movedFiles.size() + " / " + filesToMove.size() + " files.");
+            AppLogger.log(TAG, "========== RECYCLE BATCH ENDED ==========");
+
+            return movedFiles;
+        }
+
+        @Override
+        protected void onProgressUpdate(String... values) {
+            super.onProgressUpdate(values);
+            if (callback != null && values.length >= 3) {
+                try {
+                    int processed = Integer.parseInt(values[1]);
+                    int total = Integer.parseInt(values[2]);
+                    callback.onRecycleProgress(values[0], processed, total);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        @Override
+        protected void onPostExecute(List<File> movedFiles) {
+            super.onPostExecute(movedFiles);
+
+            if (progressDialog != null && progressDialog.isShowing()) {
+                try {
+                    progressDialog.dismiss();
+                } catch (Exception ignored) {}
+            }
+
+            // Clear Glide memory cache on Main Thread
+            try {
+                Glide.get(context).clearMemory();
+                AppLogger.log(TAG, "Glide Memory Cache cleared on UI Thread.");
+            } catch (Exception e) {
+                AppLogger.logError(TAG, "Failed to clear Glide memory cache", e);
+            }
+
+            if (movedFiles.isEmpty() && !filesToMove.isEmpty()) {
+                Toast.makeText(context, "Failed to move files to Recycle Bin. Check diagnostic log.", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(context, movedFiles.size() + " item(s) moved to Recycle Bin.", Toast.LENGTH_SHORT).show();
+            }
+
+            if (callback != null) {
+                callback.onRecycleComplete(movedFiles, movedFiles.size());
+            }
+        }
+    }
+}
