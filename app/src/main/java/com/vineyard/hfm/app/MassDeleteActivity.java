@@ -252,6 +252,11 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         Uri queryUri = MediaStore.Files.getContentUri("external");
         addFilterClauses(selection, selectionArgs);
 
+        // ALWAYS exclude files inside HFMRecycleBin to eliminate phantom empty thumbnails
+        if (selection.length() > 0) selection.append(" AND ");
+        selection.append(MediaStore.Files.FileColumns.DATA + " NOT LIKE ?");
+        selectionArgs.add("%/HFMRecycleBin/%");
+
         if (params.folderPath != null && !params.folderPath.isEmpty()) {
             if (selection.length() > 0) selection.append(" AND ");
             selection.append(MediaStore.Files.FileColumns.DATA + " LIKE ?");
@@ -297,13 +302,15 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                     long dateModifiedMillis = cursor.getLong(dateModifiedColumn) * 1000;
                     String path = cursor.getString(dataColumn);
 
+                    // Skip missing files from MediaStore records
                     if (path != null) {
                         File f = new File(path);
-                        if (f.exists()) {
-                            long fsDate = f.lastModified();
-                            if (fsDate > dateModifiedMillis) {
-                                dateModifiedMillis = fsDate;
-                            }
+                        if (!f.exists()) {
+                            continue;
+                        }
+                        long fsDate = f.lastModified();
+                        if (fsDate > dateModifiedMillis) {
+                            dateModifiedMillis = fsDate;
                         }
                     }
 
@@ -325,13 +332,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 hasMore = false;
             }
         }
-
-        Collections.sort(results, new Comparator<MassDeleteAdapter.SearchResult>() {
-            @Override
-            public int compare(MassDeleteAdapter.SearchResult r1, MassDeleteAdapter.SearchResult r2) {
-                return 0;
-            }
-        });
 
         return results;
     }
@@ -381,13 +381,19 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     }
 
     private void scanDirectory(File directory, QueryParameters params, List<MassDeleteAdapter.SearchResult> results) {
+        if (directory.getName().equalsIgnoreCase("HFMRecycleBin")) {
+            return; // Exclude Recycle Bin from directory scans
+        }
+
         File[] files = directory.listFiles();
         if (files == null) return;
 
         for (File file : files) {
             if (file.isDirectory()) {
-                if (params.folderPath == null || file.getAbsolutePath().toLowerCase().contains(params.folderPath.toLowerCase())) {
-                    scanDirectory(file, params, results);
+                if (!file.getName().equalsIgnoreCase("HFMRecycleBin")) {
+                    if (params.folderPath == null || file.getAbsolutePath().toLowerCase().contains(params.folderPath.toLowerCase())) {
+                        scanDirectory(file, params, results);
+                    }
                 }
             } else {
                 boolean folderMatch = (params.folderPath == null) ||
