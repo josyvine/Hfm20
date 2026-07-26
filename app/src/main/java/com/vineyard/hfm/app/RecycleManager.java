@@ -19,8 +19,8 @@ import java.util.List;
 /**
  * Centralized High-Performance Recycling & MediaStore Synchronization Engine.
  * 
- * Fixes Glitch 1: Purges MediaStore DB entries by ID & clears Glide cache to eliminate ghost thumbnails.
- * Fixes Glitch 2: Eliminates slow byte-copy loops & uses fast atomic SAF/rename operations.
+ * Fixes Glitch 1: Purges MediaStore DB entries by ID & clears Glide memory cache to eliminate ghost thumbnails.
+ * Fixes Glitch 2: Eliminates full disk cache wiping and slow byte-copy loops for instant recycling.
  * Logs diagnostic metrics directly to AppLogger (/sdcard/hfm log report/hfm_diagnostic_log.txt).
  */
 public class RecycleManager {
@@ -105,6 +105,9 @@ public class RecycleManager {
                         "Resolved Uri: " + (cachedSdRecycleBin != null ? cachedSdRecycleBin.getUri().toString() : "NULL"));
             }
 
+            // Pre-fetch SD Card path once to eliminate per-file disk query overhead inside loop
+            String sdCardPath = StorageUtils.getSdCardPath(context);
+
             for (int i = 0; i < filesToMove.size(); i++) {
                 File sourceFile = filesToMove.get(i);
                 if (sourceFile == null || !sourceFile.exists()) {
@@ -119,8 +122,11 @@ public class RecycleManager {
 
                 publishProgress(sourceFile.getName(), String.valueOf(i + 1), String.valueOf(filesToMove.size()));
 
+                // Fast check if file resides on SD Card
+                boolean fileIsOnSd = sdCardPath != null && sourcePath.startsWith(sdCardPath);
+
                 // 1. Try SD Card SAF Move
-                if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
+                if (useSdCardBin && fileIsOnSd) {
                     if (cachedSdRecycleBin != null && StorageUtils.moveFileOnSdCardSafely(context, sourceFile, cachedSdRecycleBin)) {
                         moveSuccess = true;
                         AppLogger.log(TAG, "SAF MOVE SUCCESS | " + sourcePath);
@@ -151,8 +157,8 @@ public class RecycleManager {
                         AppLogger.log(TAG, "RENAME FAILED | File.renameTo() returned false for: " + sourcePath);
 
                         // Fallback: Use StorageUtils SAF Copy-Delete ONLY if on different volumes
-                        boolean isSourceOnSd = StorageUtils.isFileOnSdCard(context, sourceFile);
-                        boolean isDestOnSd = StorageUtils.isFileOnSdCard(context, destFile);
+                        boolean isSourceOnSd = fileIsOnSd;
+                        boolean isDestOnSd = sdCardPath != null && destFile.getAbsolutePath().startsWith(sdCardPath);
 
                         if (isSourceOnSd && isDestOnSd) {
                             AppLogger.log(TAG, "BLOCKED | Prevented slow byte-copy on same SD Card volume for: " + sourcePath);
@@ -193,15 +199,6 @@ public class RecycleManager {
                 AppLogger.logMetric(TAG, "MediaStore System DB Purge", purgeDuration, "Purged " + purgedSourcePaths.size() + " path(s)");
             }
 
-            // --- CRITICAL FIX FOR GLITCH 1: CLEAR GLIDE THUMBNAIL CACHE ---
-            try {
-                // Clear Glide disk cache on background thread
-                Glide.get(context).clearDiskCache();
-                AppLogger.log(TAG, "Glide Disk Cache cleared successfully.");
-            } catch (Exception e) {
-                AppLogger.logError(TAG, "Failed to clear Glide disk cache", e);
-            }
-
             long totalDuration = System.currentTimeMillis() - totalStartTime;
             AppLogger.logMetric(TAG, "FULL BATCH RECYCLE COMPLETE", totalDuration, 
                     "Successfully moved " + movedFiles.size() + " / " + filesToMove.size() + " files.");
@@ -232,7 +229,7 @@ public class RecycleManager {
                 } catch (Exception ignored) {}
             }
 
-            // Clear Glide memory cache on Main Thread
+            // Clear Glide memory cache on Main Thread for immediate UI update
             try {
                 Glide.get(context).clearMemory();
                 AppLogger.log(TAG, "Glide Memory Cache cleared on UI Thread.");
