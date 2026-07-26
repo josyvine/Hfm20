@@ -37,8 +37,10 @@ public class StorageUtils {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         if (uri != null) {
             prefs.edit().putString(KEY_SDCARD_URI, uri.toString()).apply();
+            AppLogger.log(TAG, "Saved SD Card URI: " + uri.toString());
         } else {
             prefs.edit().remove(KEY_SDCARD_URI).apply();
+            AppLogger.log(TAG, "Cleared SD Card URI from SharedPreferences.");
         }
     }
 
@@ -73,7 +75,7 @@ public class StorageUtils {
             }
             return true;
         } catch (SecurityException e) {
-            Log.e(TAG, "SD Card URI permission was revoked or invalid.", e);
+            AppLogger.logError(TAG, "SD Card URI permission was revoked or invalid.", e);
             saveSdCardUri(context, null);
             return false;
         }
