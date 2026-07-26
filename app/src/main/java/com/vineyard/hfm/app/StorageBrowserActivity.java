@@ -52,9 +52,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -717,9 +719,6 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
         final ArrayList<String> folderPathList = new ArrayList<>();
         folderPathList.add(folder.getAbsolutePath());
 
-        final String[] batchOptions = {"50", "100", "500", "1000", "Max (All at once)"};
-        final int[] batchValues = {50, 100, 500, 1000, 100000};
-
         new AlertDialog.Builder(StorageBrowserActivity.this)
             .setTitle("Confirm Folder Wipe")
             .setMessage("Delete '" + folder.getName() + "' and all contents permanently?")
@@ -735,10 +734,15 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
 
     private void initiateHidingProcess(final List<File> filesToHide) {
         boolean requiresSdCardPermission = false;
-        for (File file : filesToHide) {
-            if (StorageUtils.isFileOnSdCard(this, file) && !StorageUtils.hasSdCardPermission(this)) {
-                requiresSdCardPermission = true;
-                break;
+        String sdCardPath = StorageUtils.getSdCardPath(this);
+        boolean hasSdPermission = StorageUtils.hasSdCardPermission(this);
+
+        if (sdCardPath != null && !hasSdPermission) {
+            for (File file : filesToHide) {
+                if (file.getAbsolutePath().startsWith(sdCardPath)) {
+                    requiresSdCardPermission = true;
+                    break;
+                }
             }
         }
 
@@ -765,10 +769,15 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
         }
 
         boolean requiresSdCardPermission = false;
-        for (File file : initiallySelectedFiles) {
-            if (StorageUtils.isFileOnSdCard(this, file) && !StorageUtils.hasSdCardPermission(this)) {
-                requiresSdCardPermission = true;
-                break;
+        String sdCardPath = StorageUtils.getSdCardPath(this);
+        boolean hasSdPermission = StorageUtils.hasSdCardPermission(this);
+
+        if (sdCardPath != null && !hasSdPermission) {
+            for (File file : initiallySelectedFiles) {
+                if (file.getAbsolutePath().startsWith(sdCardPath)) {
+                    requiresSdCardPermission = true;
+                    break;
+                }
             }
         }
 
@@ -786,7 +795,7 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
         }
     }
 
-    private List<File> findSiblingFiles(File originalFile) {
+    private List<File> findSiblingFiles(File originalFile, Map<String, File[]> dirCache) {
         List<File> siblings = new ArrayList<>();
         siblings.add(originalFile);
         String fileName = originalFile.getName();
@@ -795,7 +804,11 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
             String baseName = matcher.group(0);
             File parentDir = originalFile.getParentFile();
             if (parentDir != null && parentDir.isDirectory()) {
-                File[] filesInDir = parentDir.listFiles();
+                String parentPath = parentDir.getAbsolutePath();
+                if (!dirCache.containsKey(parentPath)) {
+                    dirCache.put(parentPath, parentDir.listFiles());
+                }
+                File[] filesInDir = dirCache.get(parentPath);
                 if (filesInDir != null) {
                     for (File potentialSibling : filesInDir) {
                         if (potentialSibling.isFile() && potentialSibling.getName().startsWith(baseName) && !potentialSibling.getAbsolutePath().equals(originalFile.getAbsolutePath())) {
@@ -811,13 +824,14 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
     private void showDeleteConfirmationDialog(final List<File> filesToConfirm) {
         final Set<File> masterDeleteSet = new HashSet<>();
         int foldersCount = 0;
+        Map<String, File[]> dirCache = new HashMap<>();
         
         for (File selectedFile : filesToConfirm) {
             if (selectedFile.isDirectory()) {
                 masterDeleteSet.add(selectedFile);
                 foldersCount++;
             } else {
-                masterDeleteSet.addAll(findSiblingFiles(selectedFile));
+                masterDeleteSet.addAll(findSiblingFiles(selectedFile, dirCache));
             }
         }
 
