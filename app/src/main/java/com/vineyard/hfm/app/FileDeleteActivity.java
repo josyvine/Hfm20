@@ -518,10 +518,17 @@ public class FileDeleteActivity extends Activity {
             
             List<File> finalToDelete = new ArrayList<>(masterDeleteSet);
             boolean requiresSdCardPermission = false;
-            for (File file : finalToDelete) {
-                if (StorageUtils.isFileOnSdCard(FileDeleteActivity.this, file) && !StorageUtils.hasSdCardPermission(FileDeleteActivity.this)) {
-                    requiresSdCardPermission = true;
-                    break;
+
+            // Query SD Card path and permission ONCE before loop to prevent Binder IPC & disk read stalls
+            String sdCardPath = StorageUtils.getSdCardPath(FileDeleteActivity.this);
+            boolean hasSdPermission = StorageUtils.hasSdCardPermission(FileDeleteActivity.this);
+
+            if (sdCardPath != null && !hasSdPermission) {
+                for (File file : finalToDelete) {
+                    if (file.getAbsolutePath().startsWith(sdCardPath)) {
+                        requiresSdCardPermission = true;
+                        break;
+                    }
                 }
             }
 
@@ -830,13 +837,17 @@ public class FileDeleteActivity extends Activity {
                  if (!recycleBinDir.mkdir()) return new ArrayList<>();
             }
 
+            // Pre-fetch SD Card path once
+            String sdCardPath = StorageUtils.getSdCardPath(context);
+
             for (File sourceFile : filesToMove) {
                 if (!sourceFile.exists()) continue;
 
                 boolean moveSuccess = false;
                 File destFile = null;
+                boolean isOnSd = sdCardPath != null && sourceFile.getAbsolutePath().startsWith(sdCardPath);
 
-                if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
+                if (useSdCardBin && isOnSd) {
                      if (StorageUtils.moveFileOnSdCardSafely(context, sourceFile)) {
                          moveSuccess = true;
                      }
