@@ -969,8 +969,30 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         startActivity(intent);
     }
 
-    private void moveToRecycleBin(List<SearchResult> resultsToMove, boolean useSdCardBin) {
-        new MoveToRecycleTask(resultsToMove, useSdCardBin).execute();
+    private void moveToRecycleBin(final List<SearchResult> resultsToMove, boolean useSdCardBin) {
+        List<File> filesToMove = getFilesFromResults(resultsToMove);
+        RecycleManager.recycleFiles(this, filesToMove, useSdCardBin, new RecycleManager.RecycleCallback() {
+            @Override
+            public void onRecycleProgress(String currentFileName, int processed, int total) {
+            }
+
+            @Override
+            public void onRecycleComplete(List<File> successfullyMovedFiles, int totalCount) {
+                List<SearchResult> movedResults = new ArrayList<>();
+                for (SearchResult result : resultsToMove) {
+                    if (result.getPath() != null) {
+                        File f = new File(result.getPath());
+                        if (successfullyMovedFiles.contains(f) || !f.exists()) {
+                            movedResults.add(result);
+                        }
+                    }
+                }
+                if (!movedResults.isEmpty()) {
+                    masterList.removeAll(movedResults);
+                    rebuildDisplayList();
+                }
+            }
+        });
     }
 
     private List<SearchResult> findSiblingFiles(SearchResult originalResult) {
@@ -1508,6 +1530,23 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
     }
 
     private void openFileViewer(final SearchResult item) {
+        if (item == null || item.getPath() == null) {
+            Toast.makeText(this, "Invalid file item.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        File checkFile = new File(item.getPath());
+        if (!checkFile.exists()) {
+            AppLogger.log(TAG, "BLOCKED VIEWER OPEN | File missing: " + item.getPath());
+            List<String> singlePath = new ArrayList<>();
+            singlePath.add(item.getPath());
+            MediaStoreUtils.purgePathsFromMediaStore(this, singlePath);
+            masterList.remove(item);
+            rebuildDisplayList();
+            Toast.makeText(this, "File no longer exists.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         new AsyncTask<Void, Void, Intent>() {
             @Override
             protected Intent doInBackground(Void... voids) {
@@ -1581,146 +1620,6 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         }
         Collections.sort(siblingFiles);
         return siblingFiles;
-    }
-
-    private class MoveToRecycleTask extends AsyncTask<Void, Void, List<SearchResult>> {
-        private AlertDialog progressDialog;
-        private List<SearchResult> resultsToMove;
-        private Context context;
-        private boolean useSdCardBin;
-
-        public MoveToRecycleTask(List<SearchResult> resultsToMove, boolean useSdCardBin) {
-            this.resultsToMove = resultsToMove;
-            this.context = SearchActivity.this;
-            this.useSdCardBin = useSdCardBin;
-        }
-
-        @Override
-        protected void onPreExecute() {
-            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-            View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_progress_simple, null);
-            builder.setView(dialogView);
-            builder.setCancelable(false);
-            progressDialog = builder.create();
-            progressDialog.show();
-        }
-
-        @Override
-        protected List<SearchResult> doInBackground(Void... voids) {
-            File recycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
-            if (!recycleBinDir.exists() && !useSdCardBin) {
-                if (!recycleBinDir.mkdir()) return new ArrayList<>();
-            }
-
-            DocumentFile cachedSdRecycleBin = null;
-            if (useSdCardBin) {
-                cachedSdRecycleBin = StorageUtils.getOrCreateSdCardRecycleBin(context);
-            }
-
-            List<SearchResult> movedResults = new ArrayList<>();
-            List<String> purgedSourcePaths = new ArrayList<>();
-
-            for (SearchResult result : resultsToMove) {
-                if (result.getPath() == null) continue;
-                File sourceFile = new File(result.getPath());
-                
-                if (sourceFile.exists()) {
-                    boolean moveSuccess = false;
-                    File destFile = null;
-                    
-                    if (useSdCardBin && StorageUtils.isFileOnSdCard(context, sourceFile)) {
-                         if (cachedSdRecycleBin != null && StorageUtils.moveFileOnSdCardSafely(context, sourceFile, cachedSdRecycleBin)) {
-                             moveSuccess = true;
-                         }
-                    } else {
-                        destFile = new File(recycleBinDir, sourceFile.getName());
-                        if (destFile.exists()) {
-                            String name = sourceFile.getName();
-                            String extension = "";
-                            int dotIndex = name.lastIndexOf(".");
-                            if (dotIndex > 0) {
-                                extension = name.substring(dotIndex);
-                                name = name.substring(0, dotIndex);
-                            }
-                            destFile = new File(recycleBinDir, name + "_" + System.currentTimeMillis() + extension);
-                        }
-                        
-                        if (sourceFile.renameTo(destFile)) {
-                            moveSuccess = true;
-                        } else {
-                            boolean isSourceOnSd = StorageUtils.isFileOnSdCard(context, sourceFile);
-                            boolean isDestOnSd = StorageUtils.isFileOnSdCard(context, destFile);
-                            
-                            if (isSourceOnSd && isDestOnSd) {
-                                Log.e(TAG, "Blocked extremely slow copy-delete fallback on same SD card volume.");
-                                moveSuccess = false;
-                            } else {
-                                if (StorageUtils.copyFile(context, sourceFile, destFile)) {
-                                    if (StorageUtils.deleteFile(context, sourceFile)) {
-                                        moveSuccess = true;
-                                    } else {
-                                        destFile.delete();
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (moveSuccess) {
-                        movedResults.add(result);
-                        purgedSourcePaths.add(sourceFile.getAbsolutePath());
-                        if (destFile != null) {
-                            MediaStoreUtils.scanNewPath(context, destFile);
-                        }
-                    }
-                }
-            }
-
-            // Immediately purge original source file paths from system MediaStore DB to fix Glitch 1
-            if (!purgedSourcePaths.isEmpty()) {
-                MediaStoreUtils.purgePathsFromMediaStore(context, purgedSourcePaths);
-            }
-
-            return movedResults;
-        }
-
-        @Override
-        protected void onPostExecute(List<SearchResult> movedResults) {
-            progressDialog.dismiss();
-            if (movedResults.isEmpty() && !resultsToMove.isEmpty()) {
-                Toast.makeText(context, "Failed to move some or all files.", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(context, movedResults.size() + " file(s) moved to Recycle Bin.", Toast.LENGTH_LONG).show();
-            }
-            if (!movedResults.isEmpty()) {
-                masterList.removeAll(movedResults);
-                rebuildDisplayList();
-            }
-        }
-
-        private boolean copyFile(File source, File destination) {
-            InputStream in = null;
-            OutputStream out = null;
-            try {
-                in = new FileInputStream(source);
-                out = new FileOutputStream(destination);
-                byte[] buf = new byte[131072]; 
-                int len;
-                while ((len = in.read(buf)) > 0) {
-                    out.write(buf, 0, len);
-                }
-                return true;
-            } catch (IOException e) {
-                return StorageUtils.copyFile(context, source, destination);
-            } finally {
-                try {
-                    if (in != null) in.close();
-                    if (out != null) out.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
     }
 
     private class PinchZoomListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
