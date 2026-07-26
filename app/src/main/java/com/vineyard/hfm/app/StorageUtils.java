@@ -30,16 +30,19 @@ public class StorageUtils {
     
     public static final String SD_RECYCLE_BIN_NAME = "HFMRecycleBin";
 
-    // Static cache variable to prevent ANR crash on large file selections
+    // Static cache variables to prevent ANR and IPC Binder freezes on large file selections
     private static String cachedSdCardPath = null;
+    private static Boolean cachedHasPermission = null;
 
     public static void saveSdCardUri(Context context, Uri uri) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         if (uri != null) {
             prefs.edit().putString(KEY_SDCARD_URI, uri.toString()).apply();
+            cachedHasPermission = true;
             AppLogger.log(TAG, "Saved SD Card Uri: " + uri.toString());
         } else {
             prefs.edit().remove(KEY_SDCARD_URI).apply();
+            cachedHasPermission = false;
             AppLogger.log(TAG, "Cleared saved SD Card Uri from preferences.");
         }
     }
@@ -54,8 +57,19 @@ public class StorageUtils {
     }
 
     public static boolean hasSdCardPermission(Context context) {
+        return hasSdCardPermission(context, false);
+    }
+
+    public static boolean hasSdCardPermission(Context context, boolean forceRefresh) {
+        if (!forceRefresh && cachedHasPermission != null) {
+            return cachedHasPermission;
+        }
+
         Uri sdCardUri = getSdCardUri(context);
-        if (sdCardUri == null) return false;
+        if (sdCardUri == null) {
+            cachedHasPermission = false;
+            return false;
+        }
 
         try {
             // Verify against system's persisted URI permissions to prevent stale SharedPreferences hangs
@@ -69,14 +83,16 @@ public class StorageUtils {
             }
 
             if (!hasPersistedGrant) {
-                // Try taking persistable permissions as a fallback
                 int takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
                 context.getContentResolver().takePersistableUriPermission(sdCardUri, takeFlags);
+                hasPersistedGrant = true;
             }
-            return true;
+            cachedHasPermission = hasPersistedGrant;
+            return hasPersistedGrant;
         } catch (SecurityException e) {
             AppLogger.logError(TAG, "SD Card URI permission was revoked or invalid.", e);
             saveSdCardUri(context, null);
+            cachedHasPermission = false;
             return false;
         }
     }
@@ -111,8 +127,15 @@ public class StorageUtils {
     }
 
     public static boolean isFileOnSdCard(Context context, File file) {
+        if (file == null) return false;
         String sdCardPath = getSdCardPath(context);
-        if (sdCardPath != null && file != null) {
+        if (sdCardPath != null) {
+            // FAST String path comparison: Avoids blocking synchronous getCanonicalPath() disk I/O
+            String absPath = file.getAbsolutePath();
+            if (absPath.startsWith(sdCardPath)) {
+                return true;
+            }
+            // Fallback check ONLY if symlinks exist in path
             try {
                 return file.getCanonicalPath().startsWith(sdCardPath);
             } catch (IOException e) {
