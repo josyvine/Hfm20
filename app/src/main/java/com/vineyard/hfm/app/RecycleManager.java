@@ -78,9 +78,22 @@ public class RecycleManager {
             List<String> purgedSourcePaths = new ArrayList<>();
 
             File phoneRecycleBinDir = new File(Environment.getExternalStorageDirectory(), "HFMRecycleBin");
-            if (!phoneRecycleBinDir.exists() && !useSdCardBin) {
-                boolean created = phoneRecycleBinDir.mkdir();
-                AppLogger.log(TAG, "Created Phone Recycle Bin directory: " + phoneRecycleBinDir.getAbsolutePath() + " -> " + created);
+            if (!useSdCardBin) {
+                if (!phoneRecycleBinDir.exists()) {
+                    boolean created = phoneRecycleBinDir.mkdirs();
+                    AppLogger.log(TAG, "Created Phone Recycle Bin directory: " + phoneRecycleBinDir.getAbsolutePath() + " -> " + created);
+                }
+
+                // Create .nomedia file in Phone Recycle Bin so MediaStore ignores its contents
+                File nomediaFile = new File(phoneRecycleBinDir, ".nomedia");
+                if (!nomediaFile.exists()) {
+                    try {
+                        boolean nomediaCreated = nomediaFile.createNewFile();
+                        AppLogger.log(TAG, "Created .nomedia in Phone Recycle Bin: " + nomediaCreated);
+                    } catch (Exception e) {
+                        AppLogger.logError(TAG, "Failed to create .nomedia file in Phone Recycle Bin", e);
+                    }
+                }
             }
 
             DocumentFile cachedSdRecycleBin = null;
@@ -167,11 +180,6 @@ public class RecycleManager {
                 if (moveSuccess) {
                     movedFiles.add(sourceFile);
                     purgedSourcePaths.add(sourcePath);
-
-                    // Scan newly created destination file in recycle bin
-                    if (destFile != null) {
-                        MediaStoreUtils.scanNewPath(context, destFile);
-                    }
                 }
 
                 AppLogger.logMetric(TAG, "Item Recycle Processing", fileDuration, "Result: " + moveSuccess + " | File: " + sourcePath);
