@@ -37,10 +37,10 @@ public class StorageUtils {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         if (uri != null) {
             prefs.edit().putString(KEY_SDCARD_URI, uri.toString()).apply();
-            AppLogger.log(TAG, "Saved SD Card URI: " + uri.toString());
+            AppLogger.log(TAG, "Saved SD Card Uri: " + uri.toString());
         } else {
             prefs.edit().remove(KEY_SDCARD_URI).apply();
-            AppLogger.log(TAG, "Cleared SD Card URI from SharedPreferences.");
+            AppLogger.log(TAG, "Cleared saved SD Card Uri from preferences.");
         }
     }
 
@@ -225,7 +225,7 @@ public class StorageUtils {
                 return directDocFile;
             }
         } catch (Exception e) {
-            Log.w(TAG, "Direct SAF URI construction failed, falling back to segment traversal", e);
+            AppLogger.log(TAG, "Direct SAF URI construction failed, falling back to segment traversal: " + e.getMessage());
         }
 
         // Fallback: Segment traversal (used if direct URI construction is unsupported on specific OEM ROMs)
@@ -296,7 +296,7 @@ public class StorageUtils {
             }
             return true;
         } catch (IOException e) {
-            Log.e(TAG, "File copy failed", e);
+            AppLogger.logError(TAG, "File copy failed", e);
             return false;
         } finally {
             try {
@@ -348,14 +348,14 @@ public class StorageUtils {
                                 sourceDoc.getUri(), sourceDoc.getParentFile() != null ? sourceDoc.getParentFile().getUri() : recycleBinDoc.getUri(), recycleBinDoc.getUri());
                         return movedUri != null;
                     } catch (Exception e) {
-                        Log.w(TAG, "Native moveDocument failed, attempting rename fallback", e);
+                        AppLogger.log(TAG, "Native moveDocument failed, attempting rename fallback: " + e.getMessage());
                     }
                     if (sourceDoc.renameTo(sourceFile.getName())) {
                         return true; 
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "SAF Move failed", e);
+                AppLogger.logError(TAG, "SAF Move failed", e);
             }
         }
         return false;
