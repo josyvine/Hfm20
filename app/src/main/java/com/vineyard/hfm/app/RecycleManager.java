@@ -1,13 +1,9 @@
 package com.vineyard.hfm.app;
 
 import android.app.AlertDialog;
-import android.content.ContentResolver;
 import android.content.Context;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Environment;
-import android.provider.MediaStore;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Toast;
@@ -140,7 +136,7 @@ public class RecycleManager {
                         AppLogger.logMetric(TAG, "Atomic File.renameTo()", renameDuration, "Moved: " + sourcePath + " -> " + destFile.getAbsolutePath());
                     } else {
                         AppLogger.log(TAG, "RENAME FAILED | File.renameTo() returned false for: " + sourcePath);
-                        
+
                         // Fallback: Use StorageUtils SAF Copy-Delete ONLY if on different volumes
                         boolean isSourceOnSd = StorageUtils.isFileOnSdCard(context, sourceFile);
                         boolean isDestOnSd = StorageUtils.isFileOnSdCard(context, destFile);
