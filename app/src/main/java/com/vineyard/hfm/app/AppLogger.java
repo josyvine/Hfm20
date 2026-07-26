@@ -35,6 +35,15 @@ public class AppLogger {
         log(tag, message, null);
     }
 
+    public static void logError(String tag, String message, Throwable throwable) {
+        log(tag, "ERROR | " + message, throwable);
+    }
+
+    public static void logMetric(String tag, String operation, long durationMs, String details) {
+        String metricMessage = String.format(Locale.US, "[METRIC] %s executed in %d ms | %s", operation, durationMs, details != null ? details : "");
+        log(tag, metricMessage, null);
+    }
+
     public static void log(String tag, String message, Throwable throwable) {
         String timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(new Date());
         StringBuilder logBuilder = new StringBuilder();
