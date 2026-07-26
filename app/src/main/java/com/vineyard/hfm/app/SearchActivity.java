@@ -1703,4 +1703,4 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         if (docExtensions.contains(extension)) return CATEGORY_DOCS;
         return CATEGORY_OTHER;
     }
-}
+} 
