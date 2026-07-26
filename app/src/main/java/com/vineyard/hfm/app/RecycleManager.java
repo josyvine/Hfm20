@@ -84,7 +84,7 @@ public class RecycleManager {
                     AppLogger.log(TAG, "Created Phone Recycle Bin directory: " + phoneRecycleBinDir.getAbsolutePath() + " -> " + created);
                 }
 
-                // Create .nomedia file in Phone Recycle Bin so MediaStore ignores its contents
+                // Create .nomedia file in Phone Recycle Bin so system MediaStore skips indexing it
                 File nomediaFile = new File(phoneRecycleBinDir, ".nomedia");
                 if (!nomediaFile.exists()) {
                     try {
