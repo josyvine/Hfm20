@@ -563,12 +563,18 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
             List<MassDeleteAdapter.SearchResult> toDelete = new ArrayList<>();
             boolean requiresSdCardPermission = false;
             
+            // Pre-fetch SD Card path and permission status ONCE to prevent IPC Binder call flood
+            String sdCardPath = StorageUtils.getSdCardPath(MassDeleteActivity.this);
+            boolean hasSdPermission = StorageUtils.hasSdCardPermission(MassDeleteActivity.this);
+
             for (MassDeleteAdapter.SearchResult item : displayList) {
                 if (!item.isExcluded()) {
                     toDelete.add(item);
-                    File file = getFileFromResult(item);
-                    if (file != null && StorageUtils.isFileOnSdCard(MassDeleteActivity.this, file) && !StorageUtils.hasSdCardPermission(MassDeleteActivity.this)) {
-                        requiresSdCardPermission = true;
+                    if (!requiresSdCardPermission && sdCardPath != null && !hasSdPermission) {
+                        File file = getFileFromResult(item);
+                        if (file != null && file.getAbsolutePath().startsWith(sdCardPath)) {
+                            requiresSdCardPermission = true;
+                        }
                     }
                 }
             }
