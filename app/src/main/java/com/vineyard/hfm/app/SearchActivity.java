@@ -359,6 +359,11 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         Uri queryUri = MediaStore.Files.getContentUri("external");
         addFilterClauses(selection, selectionArgs);
 
+        // ALWAYS exclude files inside HFMRecycleBin to eliminate phantom empty thumbnails
+        if (selection.length() > 0) selection.append(" AND ");
+        selection.append(MediaStore.Files.FileColumns.DATA + " NOT LIKE ?");
+        selectionArgs.add("%/HFMRecycleBin/%");
+
         if (params.startTimeSeconds != -1 && params.endTimeSeconds != -1) {
             if (selection.length() > 0) selection.append(" AND ");
             selection.append(MediaStore.Files.FileColumns.DATE_MODIFIED + " >= ? AND " + MediaStore.Files.FileColumns.DATE_MODIFIED + " <= ?");
@@ -408,6 +413,15 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                     long dateModifiedSeconds = cursor.getLong(dateModifiedColumn);
                     String displayName = cursor.getString(displayNameColumn);
                     String path = cursor.getString(dataColumn);
+
+                    // Skip file if it no longer physically exists on disk
+                    if (path != null) {
+                        File actualFile = new File(path);
+                        if (!actualFile.exists()) {
+                            continue;
+                        }
+                    }
+
                     Uri contentUri;
                     if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) {
                         contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
@@ -420,11 +434,9 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                     long lastModifiedMillis = dateModifiedSeconds * 1000;
                     if (path != null) {
                         File actualFile = new File(path);
-                        if (actualFile.exists()) {
-                            long filesystemDate = actualFile.lastModified();
-                            if (filesystemDate > lastModifiedMillis) {
-                                lastModifiedMillis = filesystemDate;
-                            }
+                        long filesystemDate = actualFile.lastModified();
+                        if (filesystemDate > lastModifiedMillis) {
+                            lastModifiedMillis = filesystemDate;
                         }
                     }
 
@@ -489,13 +501,19 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
     }
 
     private void scanDirectory(File directory, QueryParameters params, List<SearchResult> results) {
+        if (directory.getName().equalsIgnoreCase("HFMRecycleBin")) {
+            return; // Never scan Recycle Bin contents in search
+        }
+
         File[] files = directory.listFiles();
         if (files == null) return;
 
         for (File file : files) {
             if (file.isDirectory()) {
-                if (params.folderPath == null || file.getAbsolutePath().toLowerCase().contains(params.folderPath.toLowerCase())) {
-                    scanDirectory(file, params, results);
+                if (!file.getName().equalsIgnoreCase("HFMRecycleBin")) {
+                    if (params.folderPath == null || file.getAbsolutePath().toLowerCase().contains(params.folderPath.toLowerCase())) {
+                        scanDirectory(file, params, results);
+                    }
                 }
             } else {
                 boolean dateMatch = (params.startTimeSeconds == -1) ||
