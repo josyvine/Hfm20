@@ -817,7 +817,8 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
     }
 
     private void initiateDeletionProcess() {
-        new PreDeletionCheckTask().execute();
+        // Execute on Parallel Thread Pool to prevent global AsyncTask queue starvation
+        new PreDeletionCheckTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private class PreDeletionCheckTask extends AsyncTask<Void, Void, PreDeletionResults> {
@@ -1595,6 +1596,7 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
             return;
         }
 
+        // Execute on Parallel Thread Pool to prevent global AsyncTask queue starvation
         new AsyncTask<Void, Void, Intent>() {
             @Override
             protected Intent doInBackground(Void... voids) {
@@ -1643,7 +1645,7 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
                     Toast.makeText(SearchActivity.this, "Error opening file.", Toast.LENGTH_SHORT).show();
                 }
             }
-        }.execute();
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private ArrayList<String> getSiblingFilesForViewer(File currentFile, final int category) {
@@ -1703,4 +1705,4 @@ public class SearchActivity extends Activity implements SearchAdapter.OnItemClic
         if (docExtensions.contains(extension)) return CATEGORY_DOCS;
         return CATEGORY_OTHER;
     }
-} 
+}
