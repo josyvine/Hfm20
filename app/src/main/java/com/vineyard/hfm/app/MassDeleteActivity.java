@@ -629,7 +629,8 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     }
 
     private void initiateDeletionProcess() {
-        new PreDeletionCheckTask().execute();
+        // Execute on Parallel Thread Pool to prevent global AsyncTask queue starvation
+        new PreDeletionCheckTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private class PreDeletionCheckTask extends AsyncTask<Void, Void, PreDeletionResults> {
@@ -1033,6 +1034,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
             return;
         }
 
+        // Execute on Parallel Thread Pool to prevent global AsyncTask queue starvation
         new AsyncTask<Void, Void, Intent>() {
             @Override
             protected Intent doInBackground(Void... voids) {
@@ -1081,7 +1083,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                     Toast.makeText(MassDeleteActivity.this, "Error opening file.", Toast.LENGTH_SHORT).show();
                 }
             }
-        }.execute();
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private ArrayList<String> getSiblingFilesForViewer(File currentFile, final int category) {
