@@ -16,6 +16,8 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
@@ -33,106 +35,195 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MassDeleteAdapter extends RecyclerView.Adapter<MassDeleteAdapter.ItemViewHolder> {
+public class MassDeleteAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+    private static final int TYPE_HEADER = 0;
+    private static final int TYPE_ITEM = 1;
 
     private final Context context;
-    private List<SearchResult> listItems;
+    private List<Object> listItems;
     private final OnItemClickListener itemClickListener;
-    
-    // RESTORED: Executor for PDF/APK manual generation
+    private final OnHeaderCheckedChangeListener headerCheckedListener;
+    private final OnHeaderClickListener headerClickListener;
+
+    // Executor for PDF/APK manual generation
     private final ExecutorService thumbnailExecutor = Executors.newFixedThreadPool(4);
 
     public interface OnItemClickListener {
         void onItemClick(SearchResult item);
+        void onItemLongClick(SearchResult item);
     }
 
-    public MassDeleteAdapter(Context context, List<SearchResult> listItems, OnItemClickListener itemClickListener) {
+    public interface OnHeaderCheckedChangeListener {
+        void onHeaderCheckedChanged(MassDeleteActivity.DateHeader header, boolean isChecked);
+    }
+
+    public interface OnHeaderClickListener {
+        void onHeaderClick(MassDeleteActivity.DateHeader header);
+    }
+
+    public MassDeleteAdapter(Context context, List<Object> listItems,
+                             OnItemClickListener itemClickListener,
+                             OnHeaderCheckedChangeListener headerCheckedListener,
+                             OnHeaderClickListener headerClickListener) {
         this.context = context;
         this.listItems = listItems;
         this.itemClickListener = itemClickListener;
+        this.headerCheckedListener = headerCheckedListener;
+        this.headerClickListener = headerClickListener;
+    }
+
+    public MassDeleteAdapter(Context context, List<Object> listItems, OnItemClickListener itemClickListener) {
+        this(context, listItems, itemClickListener, null, null);
+    }
+
+    public void updateData(List<Object> newItems) {
+        this.listItems = newItems;
+        notifyDataSetChanged();
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        if (listItems.get(position) instanceof MassDeleteActivity.DateHeader) {
+            return TYPE_HEADER;
+        } else {
+            return TYPE_ITEM;
+        }
     }
 
     @NonNull
     @Override
-    public ItemViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(context).inflate(R.layout.grid_item_search_result, parent, false);
-        return new ItemViewHolder(view);
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == TYPE_HEADER) {
+            View view = LayoutInflater.from(context).inflate(R.layout.list_item_date_header, parent, false);
+            return new HeaderViewHolder(view);
+        } else {
+            View view = LayoutInflater.from(context).inflate(R.layout.grid_item_search_result, parent, false);
+            return new ItemViewHolder(view);
+        }
     }
 
     @Override
-    public void onBindViewHolder(@NonNull final ItemViewHolder holder, int position) {
-        final SearchResult item = listItems.get(position);
+    public void onBindViewHolder(@NonNull final RecyclerView.ViewHolder holder, int position) {
+        int viewType = getItemViewType(position);
 
-        holder.indexNumber.setText(String.valueOf(position + 1));
-        holder.exclusionOverlay.setVisibility(item.isExcluded() ? View.GONE : View.VISIBLE);
-        holder.thumbnailImage.setTag(item.getUri().toString());
+        if (viewType == TYPE_HEADER) {
+            HeaderViewHolder headerHolder = (HeaderViewHolder) holder;
+            final MassDeleteActivity.DateHeader dateHeader = (MassDeleteActivity.DateHeader) listItems.get(position);
 
-        // Determine contrast color based on theme for generic icons
-        int contrastColor;
-        String currentTheme = ThemeManager.getTheme(context);
-        if (currentTheme.equals(ThemeManager.THEME_DARK) || currentTheme.equals(ThemeManager.THEME_AMOLED) || currentTheme.equals(ThemeManager.THEME_NORDIC)) {
-            contrastColor = ContextCompat.getColor(context, android.R.color.white);
-        } else {
-            contrastColor = ContextCompat.getColor(context, R.color.lt_colorPrimary);
-        }
+            headerHolder.dateHeaderText.setText(dateHeader.getDateString());
 
-        // Display Filename logic
-        if (isMediaFile(item.getDisplayName())) {
-            holder.fileNameText.setVisibility(View.GONE);
-        } else {
-            holder.fileNameText.setVisibility(View.VISIBLE);
-            holder.fileNameText.setText(item.getDisplayName());
-        }
-
-        String displayName = item.getDisplayName();
-        int fallbackIcon = getIconForFileType(displayName);
-
-        // HYBRID LOADING STRATEGY:
-        // 1. PDF/APK -> Use Manual Executor (Original Logic)
-        // 2. Images/Videos -> Use Glide (New Logic)
-        
-        boolean isPdfOrApk = displayName != null && (displayName.toLowerCase().endsWith(".pdf") || displayName.toLowerCase().endsWith(".apk"));
-
-        if (isPdfOrApk) {
-            // Restore placeholder
-            holder.thumbnailImage.setImageResource(fallbackIcon);
-            // Apply tint to generic placeholder
-            holder.thumbnailImage.setColorFilter(contrastColor, PorterDuff.Mode.SRC_IN);
-            
-            thumbnailExecutor.execute(() -> {
-                final Bitmap thumbnail = createSpecialThumbnail(item); // Uses restored methods
-                if (thumbnail != null && holder.thumbnailImage.getTag().equals(item.getUri().toString())) {
-                    holder.thumbnailImage.post(() -> {
-                        holder.thumbnailImage.clearColorFilter(); // Remove tint for actual rendered PDF/APK content
-                        holder.thumbnailImage.setImageBitmap(thumbnail);
-                    });
+            headerHolder.dateHeaderCheckbox.setOnCheckedChangeListener(null);
+            headerHolder.dateHeaderCheckbox.setChecked(dateHeader.isChecked());
+            headerHolder.dateHeaderCheckbox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                    if (headerCheckedListener != null) {
+                        headerCheckedListener.onHeaderCheckedChanged(dateHeader, isChecked);
+                    }
                 }
             });
+
+            // Expand / Collapse Arrow Rotation
+            headerHolder.arrowIcon.setRotation(dateHeader.isExpanded() ? 0f : 180f);
+            headerHolder.arrowIcon.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (headerClickListener != null) {
+                        headerClickListener.onHeaderClick(dateHeader);
+                    }
+                }
+            });
+
         } else {
-            // Clear tint before Glide loads media
-            holder.thumbnailImage.clearColorFilter();
+            final ItemViewHolder itemHolder = (ItemViewHolder) holder;
+            final SearchResult item = (SearchResult) listItems.get(position);
 
-            // Use Glide for everything else (Images, Videos)
-            Glide.with(context)
-                .load(item.getUri())
-                .apply(new RequestOptions()
-                    .placeholder(fallbackIcon)
-                    .error(fallbackIcon)
-                    .diskCacheStrategy(DiskCacheStrategy.ALL)
-                    .centerCrop())
-                .into(holder.thumbnailImage);
-            
-            // Re-apply tint if Glide used the fallback icon (non-media files)
-            if (!isMediaFile(displayName)) {
-                holder.thumbnailImage.setColorFilter(contrastColor, PorterDuff.Mode.SRC_IN);
+            itemHolder.indexNumber.setText(String.valueOf(position + 1));
+            itemHolder.exclusionOverlay.setVisibility(item.isExcluded() ? View.GONE : View.VISIBLE);
+            itemHolder.thumbnailImage.setTag(item.getUri().toString());
+
+            // Determine contrast color based on theme for generic icons
+            int contrastColor;
+            String currentTheme = ThemeManager.getTheme(context);
+            if (currentTheme.equals(ThemeManager.THEME_DARK) || currentTheme.equals(ThemeManager.THEME_AMOLED) || currentTheme.equals(ThemeManager.THEME_NORDIC)) {
+                contrastColor = ContextCompat.getColor(context, android.R.color.white);
+            } else {
+                contrastColor = ContextCompat.getColor(context, R.color.lt_colorPrimary);
             }
+
+            // Display Filename logic
+            if (isMediaFile(item.getDisplayName())) {
+                itemHolder.fileNameText.setVisibility(View.GONE);
+            } else {
+                itemHolder.fileNameText.setVisibility(View.VISIBLE);
+                itemHolder.fileNameText.setText(item.getDisplayName());
+            }
+
+            String displayName = item.getDisplayName();
+            int fallbackIcon = getIconForFileType(displayName);
+
+            boolean isPdfOrApk = displayName != null && (displayName.toLowerCase().endsWith(".pdf") || displayName.toLowerCase().endsWith(".apk"));
+
+            if (isPdfOrApk) {
+                // Set placeholder
+                itemHolder.thumbnailImage.setImageResource(fallbackIcon);
+                itemHolder.thumbnailImage.setColorFilter(contrastColor, PorterDuff.Mode.SRC_IN);
+
+                thumbnailExecutor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        final Bitmap thumbnail = createSpecialThumbnail(item);
+                        if (thumbnail != null && itemHolder.thumbnailImage.getTag().equals(item.getUri().toString())) {
+                            itemHolder.thumbnailImage.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    itemHolder.thumbnailImage.clearColorFilter();
+                                    itemHolder.thumbnailImage.setImageBitmap(thumbnail);
+                                }
+                            });
+                        }
+                    }
+                });
+            } else {
+                itemHolder.thumbnailImage.clearColorFilter();
+
+                // Use Glide for images and videos
+                Glide.with(context)
+                    .load(item.getUri())
+                    .apply(new RequestOptions()
+                        .placeholder(fallbackIcon)
+                        .error(fallbackIcon)
+                        .diskCacheStrategy(DiskCacheStrategy.ALL)
+                        .centerCrop())
+                    .into(itemHolder.thumbnailImage);
+
+                if (!isMediaFile(displayName)) {
+                    itemHolder.thumbnailImage.setColorFilter(contrastColor, PorterDuff.Mode.SRC_IN);
+                }
+            }
+
+            // Click listener for item selection toggle
+            itemHolder.itemView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    if (itemClickListener != null) {
+                        itemClickListener.onItemClick(item);
+                    }
+                }
+            });
+
+            // Long click listener for pop-up menu (Open, Details, Compress)
+            itemHolder.itemView.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    if (itemClickListener != null) {
+                        itemClickListener.onItemLongClick(item);
+                    }
+                    return true;
+                }
+            });
         }
-
-        holder.itemView.setOnClickListener(v -> {
-            if (itemClickListener != null) {
-                itemClickListener.onItemClick(item);
-            }
-        });
     }
 
     private boolean isMediaFile(String fileName) {
@@ -152,25 +243,17 @@ public class MassDeleteAdapter extends RecyclerView.Adapter<MassDeleteAdapter.It
     private int getIconForFileType(String fileName) {
         if (fileName == null) return R.drawable.ic_folder_modern;
         String lower = fileName.toLowerCase();
-        
-        // --- UPDATED: Professional icons for Documents ---
+
         if (lower.endsWith(".doc") || lower.endsWith(".docx") || lower.endsWith(".pdf")) return R.drawable.docs_24px;
         if (lower.endsWith(".xls") || lower.endsWith(".xlsx")) return R.drawable.docs_24px;
         if (lower.endsWith(".ppt") || lower.endsWith(".pptx")) return R.drawable.docs_24px;
         if (lower.endsWith(".txt") || lower.endsWith(".rtf") || lower.endsWith(".log")) return R.drawable.docs_24px;
-        
-        // --- UPDATED: Professional icons for Archives/Other ---
         if (lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".7z")) return R.drawable.category_24px;
-        
-        // --- UPDATED: Professional icons for Media ---
         if (lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".ogg")) return R.drawable.audio_file_24px;
         if (isMediaFile(fileName)) return R.drawable.image_24px;
-        
-        // Fallback: Modern yellow folder icon
+
         return R.drawable.ic_folder_modern;
     }
-
-    // --- RESTORED METHODS FOR PDF/APK LOGIC ---
 
     private Bitmap createSpecialThumbnail(SearchResult item) {
         Uri uri = item.getUri();
@@ -179,7 +262,7 @@ public class MassDeleteAdapter extends RecyclerView.Adapter<MassDeleteAdapter.It
         String lower = displayName.toLowerCase();
 
         if (lower.endsWith(".apk")) {
-            String path = "file".equals(uri.getScheme()) ? uri.getPath() : null;
+            String path = "file".equals(uri.getScheme()) ? uri.getPath() : item.getPath();
             if (path != null) return getApkIcon(path);
         }
         if (lower.endsWith(".pdf")) {
@@ -247,11 +330,6 @@ public class MassDeleteAdapter extends RecyclerView.Adapter<MassDeleteAdapter.It
         return listItems.size();
     }
 
-    public void updateData(List<SearchResult> newItems) {
-        this.listItems = newItems;
-        notifyDataSetChanged();
-    }
-
     public static class ItemViewHolder extends RecyclerView.ViewHolder {
         ImageView thumbnailImage;
         TextView indexNumber;
@@ -267,21 +345,45 @@ public class MassDeleteAdapter extends RecyclerView.Adapter<MassDeleteAdapter.It
         }
     }
 
+    public static class HeaderViewHolder extends RecyclerView.ViewHolder {
+        TextView dateHeaderText;
+        CheckBox dateHeaderCheckbox;
+        ImageView arrowIcon;
+
+        public HeaderViewHolder(@NonNull View itemView) {
+            super(itemView);
+            dateHeaderText = itemView.findViewById(R.id.date_header_text);
+            dateHeaderCheckbox = itemView.findViewById(R.id.date_header_checkbox);
+            arrowIcon = itemView.findViewById(R.id.header_arrow);
+        }
+    }
+
     public static class SearchResult {
         private final Uri uri;
         private final long mediaStoreId;
+        private final long lastModifiedForGrouping;
         private final String displayName;
+        private final String path;
         private boolean isExcluded;
 
-        public SearchResult(Uri uri, long mediaStoreId, String displayName) {
+        public SearchResult(Uri uri, long mediaStoreId, long lastModifiedMillis, String displayName, String path) {
             this.uri = uri;
             this.mediaStoreId = mediaStoreId;
+            this.lastModifiedForGrouping = lastModifiedMillis;
             this.displayName = displayName;
+            this.path = path;
             this.isExcluded = true;
         }
+
+        public SearchResult(Uri uri, long mediaStoreId, String displayName) {
+            this(uri, mediaStoreId, System.currentTimeMillis(), displayName, "file".equals(uri.getScheme()) ? uri.getPath() : null);
+        }
+
         public Uri getUri() { return uri; }
         public long getMediaStoreId() { return mediaStoreId; }
+        public long getLastModifiedForGrouping() { return lastModifiedForGrouping; }
         public String getDisplayName() { return displayName; }
+        public String getPath() { return path; }
         public boolean isExcluded() { return isExcluded; }
         public void setExcluded(boolean excluded) { isExcluded = excluded; }
     }
