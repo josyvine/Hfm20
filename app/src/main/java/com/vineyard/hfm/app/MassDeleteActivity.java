@@ -57,6 +57,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.security.SecureRandom;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,13 +65,14 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MassDeleteActivity extends Activity implements MassDeleteAdapter.OnItemClickListener, DragSelectTouchListener.OnDragSelectListener {
+public class MassDeleteActivity extends Activity implements MassDeleteAdapter.OnItemClickListener, MassDeleteAdapter.OnHeaderCheckedChangeListener, MassDeleteAdapter.OnHeaderClickListener, DragSelectTouchListener.OnDragSelectListener {
 
     private static final String TAG = "MassDeleteActivity";
 
@@ -79,7 +81,10 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     private RecyclerView searchResultsGrid;
     private MassDeleteAdapter adapter;
     private GridLayoutManager gridLayoutManager;
-    private List<MassDeleteAdapter.SearchResult> displayList = new ArrayList<>();
+
+    private List<Object> masterList = new ArrayList<>();
+    private List<Object> displayList = new ArrayList<>();
+
     private String currentFilterType = "all";
     private ScaleGestureDetector scaleGestureDetector;
     private int currentSpanCount = 3;
@@ -92,12 +97,38 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     private BroadcastReceiver deleteCompletionReceiver;
     private BroadcastReceiver compressionBroadcastReceiver;
 
+    private static final int CATEGORY_IMAGES = 1;
+    private static final int CATEGORY_VIDEOS = 2;
+    private static final int CATEGORY_AUDIO = 3;
+    private static final int CATEGORY_DOCS = 4;
+    private static final int CATEGORY_OTHER = 5;
+
     private final ExecutorService searchExecutor = Executors.newSingleThreadExecutor();
+    private static final Pattern FILE_BASE_NAME_PATTERN = Pattern.compile("^(IMG|VID|PANO|DSC)_\\d{8}_\\d{6}");
+
     private List<MassDeleteAdapter.SearchResult> mResultsPendingPermission;
     private Runnable mPendingOperation;
 
     private ArrayList<String> mPendingFilePathsToDelete;
     private int mPendingBatchSize;
+
+    public static class DateHeader {
+        private final String dateString;
+        private boolean isChecked;
+        private boolean isExpanded;
+
+        public DateHeader(String dateString) {
+            this.dateString = dateString;
+            this.isChecked = false;
+            this.isExpanded = true;
+        }
+
+        public String getDateString() { return dateString; }
+        public boolean isChecked() { return isChecked; }
+        public void setChecked(boolean checked) { isChecked = checked; }
+        public boolean isExpanded() { return isExpanded; }
+        public void setExpanded(boolean expanded) { isExpanded = expanded; }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -181,8 +212,20 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
     private void setupRecyclerView() {
         gridLayoutManager = new GridLayoutManager(this, currentSpanCount);
+        gridLayoutManager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+            @Override
+            public int getSpanSize(int position) {
+                if (position >= 0 && position < displayList.size()) {
+                    if (displayList.get(position) instanceof DateHeader) {
+                        return currentSpanCount;
+                    }
+                }
+                return 1;
+            }
+        });
+
         searchResultsGrid.setLayoutManager(gridLayoutManager);
-        adapter = new MassDeleteAdapter(this, displayList, this);
+        adapter = new MassDeleteAdapter(this, displayList, this, this, this);
         searchResultsGrid.setAdapter(adapter);
 
         DragSelectTouchListener dragSelectTouchListener = new DragSelectTouchListener(this, this);
@@ -224,26 +267,73 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     }
 
     private void updateUIWithResults(final List<MassDeleteAdapter.SearchResult> results, final QueryParameters params) {
+        final List<Object> groupedList = processAndGroupResults(results);
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                displayList.clear();
-                displayList.addAll(results);
+                masterList.clear();
+                masterList.addAll(groupedList);
 
                 if (params.startRange != -1 && params.endRange != -1) {
+                    int fileCounter = 0;
                     int start = Math.max(0, params.startRange - 1);
-                    int end = Math.min(displayList.size() - 1, params.endRange - 1);
-                    for (int i = start; i <= end; i++) {
-                        displayList.get(i).setExcluded(false);
+                    int end = params.endRange - 1;
+
+                    for (Object obj : masterList) {
+                        if (obj instanceof MassDeleteAdapter.SearchResult) {
+                            if (fileCounter >= start && fileCounter <= end) {
+                                ((MassDeleteAdapter.SearchResult) obj).setExcluded(false);
+                            }
+                            fileCounter++;
+                        }
                     }
                 }
 
-                adapter.updateData(displayList);
+                rebuildDisplayList();
                 if (results.isEmpty()) {
                     Toast.makeText(MassDeleteActivity.this, "No files found.", Toast.LENGTH_SHORT).show();
                 }
             }
         });
+    }
+
+    private List<Object> processAndGroupResults(List<MassDeleteAdapter.SearchResult> flatResults) {
+        List<Object> groupedList = new ArrayList<>();
+        if (flatResults.isEmpty()) {
+            return groupedList;
+        }
+
+        SimpleDateFormat sdf = new SimpleDateFormat("MMMM d, yyyy", Locale.getDefault());
+        String currentHeaderDate = "";
+
+        for (MassDeleteAdapter.SearchResult result : flatResults) {
+            String resultDate = sdf.format(new Date(result.getLastModifiedForGrouping()));
+            if (!resultDate.equals(currentHeaderDate)) {
+                currentHeaderDate = resultDate;
+                groupedList.add(new DateHeader(currentHeaderDate));
+            }
+            groupedList.add(result);
+        }
+
+        return groupedList;
+    }
+
+    private void rebuildDisplayList() {
+        displayList.clear();
+        boolean isCurrentGroupExpanded = true;
+
+        for (Object item : masterList) {
+            if (item instanceof DateHeader) {
+                DateHeader header = (DateHeader) item;
+                displayList.add(header);
+                isCurrentGroupExpanded = header.isExpanded();
+            } else {
+                if (isCurrentGroupExpanded) {
+                    displayList.add(item);
+                }
+            }
+        }
+        adapter.updateData(displayList);
     }
 
     private List<MassDeleteAdapter.SearchResult> executeQueryWithMediaStore(QueryParameters params) {
@@ -252,7 +342,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         Uri queryUri = MediaStore.Files.getContentUri("external");
         addFilterClauses(selection, selectionArgs);
 
-        // ALWAYS exclude files inside HFMRecycleBin to eliminate phantom empty thumbnails
         if (selection.length() > 0) selection.append(" AND ");
         selection.append(MediaStore.Files.FileColumns.DATA + " NOT LIKE ?");
         selectionArgs.add("%/HFMRecycleBin/%");
@@ -302,7 +391,6 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                     long dateModifiedMillis = cursor.getLong(dateModifiedColumn) * 1000;
                     String path = cursor.getString(dataColumn);
 
-                    // Skip missing files from MediaStore records
                     if (path != null) {
                         File f = new File(path);
                         if (!f.exists()) {
@@ -323,7 +411,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                         contentUri = ContentUris.withAppendedId(queryUri, id);
                     }
 
-                    results.add(new MassDeleteAdapter.SearchResult(contentUri, id, displayName));
+                    results.add(new MassDeleteAdapter.SearchResult(contentUri, id, dateModifiedMillis, displayName, path));
                 }
                 cursor.close();
                 offset += pageSize;
@@ -372,9 +460,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         Collections.sort(results, new Comparator<MassDeleteAdapter.SearchResult>() {
             @Override
             public int compare(MassDeleteAdapter.SearchResult r1, MassDeleteAdapter.SearchResult r2) {
-                File f1 = new File(r1.getUri().getPath());
-                File f2 = new File(r2.getUri().getPath());
-                return Long.compare(f2.lastModified(), f1.lastModified());
+                return Long.compare(r2.getLastModifiedForGrouping(), r1.getLastModifiedForGrouping());
             }
         });
         return results;
@@ -382,7 +468,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
     private void scanDirectory(File directory, QueryParameters params, List<MassDeleteAdapter.SearchResult> results) {
         if (directory.getName().equalsIgnoreCase("HFMRecycleBin")) {
-            return; // Exclude Recycle Bin from directory scans
+            return;
         }
 
         File[] files = directory.listFiles();
@@ -401,7 +487,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
                 if (folderMatch) {
                     if (isFileTypeMatch(file.getName())) {
-                        results.add(new MassDeleteAdapter.SearchResult(Uri.fromFile(file), file.lastModified(), file.getName()));
+                        results.add(new MassDeleteAdapter.SearchResult(Uri.fromFile(file), file.lastModified(), file.lastModified(), file.getName(), file.getAbsolutePath()));
                     }
                 }
             }
@@ -562,23 +648,25 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         protected PreDeletionResults doInBackground(Void... voids) {
             List<MassDeleteAdapter.SearchResult> toDelete = new ArrayList<>();
             boolean requiresSdCardPermission = false;
-            
-            // Pre-fetch SD Card path and permission status ONCE to prevent IPC Binder call flood
+
             String sdCardPath = StorageUtils.getSdCardPath(MassDeleteActivity.this);
             boolean hasSdPermission = StorageUtils.hasSdCardPermission(MassDeleteActivity.this);
 
-            for (MassDeleteAdapter.SearchResult item : displayList) {
-                if (!item.isExcluded()) {
-                    toDelete.add(item);
-                    if (!requiresSdCardPermission && sdCardPath != null && !hasSdPermission) {
-                        File file = getFileFromResult(item);
-                        if (file != null && file.getAbsolutePath().startsWith(sdCardPath)) {
-                            requiresSdCardPermission = true;
+            for (Object obj : masterList) {
+                if (obj instanceof MassDeleteAdapter.SearchResult) {
+                    MassDeleteAdapter.SearchResult item = (MassDeleteAdapter.SearchResult) obj;
+                    if (!item.isExcluded()) {
+                        toDelete.add(item);
+                        if (!requiresSdCardPermission && sdCardPath != null && !hasSdPermission) {
+                            File file = getFileFromResult(item);
+                            if (file != null && file.getAbsolutePath().startsWith(sdCardPath)) {
+                                requiresSdCardPermission = true;
+                            }
                         }
                     }
                 }
             }
-            
+
             if (toDelete.isEmpty()) return null;
             return new PreDeletionResults(toDelete, requiresSdCardPermission);
         }
@@ -671,8 +759,8 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                     }
                 }
                 if (!movedResults.isEmpty()) {
-                    displayList.removeAll(movedResults);
-                    adapter.notifyDataSetChanged();
+                    masterList.removeAll(movedResults);
+                    rebuildDisplayList();
                 }
             }
         });
@@ -699,7 +787,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
     private void performDelete(final List<MassDeleteAdapter.SearchResult> toDelete, int batchSize) {
         ArrayList<String> filePathsToDelete = new ArrayList<>();
-        
+
         for (MassDeleteAdapter.SearchResult item : toDelete) {
             File file = getFileFromResult(item);
             if (file != null) {
@@ -729,6 +817,9 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     private File getFileFromResult(MassDeleteAdapter.SearchResult result) {
         if ("file".equals(result.getUri().getScheme())) {
             return new File(result.getUri().getPath());
+        }
+        if (result.getPath() != null) {
+            return new File(result.getPath());
         }
 
         String path = null;
@@ -769,7 +860,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == 1001) { 
+        if (requestCode == 1001) {
             if (resultCode == Activity.RESULT_OK && mPendingFilePathsToDelete != null) {
                 FileBridge.mFilesToDelete = mPendingFilePathsToDelete;
                 startDeleteService(mPendingBatchSize);
@@ -828,7 +919,94 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     @Override
     public void onItemClick(MassDeleteAdapter.SearchResult item) {
         item.setExcluded(!item.isExcluded());
-        adapter.notifyItemChanged(displayList.indexOf(item));
+        updateHeaderStateForItem(item);
+        int index = displayList.indexOf(item);
+        if (index != -1) {
+            adapter.notifyItemChanged(index);
+        }
+    }
+
+    @Override
+    public void onItemLongClick(final MassDeleteAdapter.SearchResult item) {
+        final CharSequence[] options = {"Open", "Details", "Compress"};
+        new AlertDialog.Builder(this)
+            .setItems(options, new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    if (which == 0) {
+                        openFileViewer(item);
+                    } else if (which == 1) {
+                        List<File> files = getFilesFromResults(Collections.singletonList(item));
+                        showDetailsDialog(files);
+                    } else if (which == 2) {
+                        List<File> files = getFilesFromResults(Collections.singletonList(item));
+                        if (!files.isEmpty() && files.get(0).getParentFile() != null) {
+                            ArchiveUtils.startCompression(MassDeleteActivity.this, files, files.get(0).getParentFile());
+                            Toast.makeText(MassDeleteActivity.this, "Compression started in background.", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            })
+            .show();
+    }
+
+    @Override
+    public void onHeaderCheckedChanged(DateHeader header, boolean isChecked) {
+        header.setChecked(isChecked);
+
+        int masterIndex = masterList.indexOf(header);
+        if (masterIndex == -1) return;
+
+        for (int i = masterIndex + 1; i < masterList.size(); i++) {
+            Object currentItem = masterList.get(i);
+            if (currentItem instanceof MassDeleteAdapter.SearchResult) {
+                ((MassDeleteAdapter.SearchResult) currentItem).setExcluded(!isChecked);
+            } else if (currentItem instanceof DateHeader) {
+                break;
+            }
+        }
+
+        adapter.notifyDataSetChanged();
+    }
+
+    @Override
+    public void onHeaderClick(DateHeader header) {
+        header.setExpanded(!header.isExpanded());
+        rebuildDisplayList();
+    }
+
+    private void updateHeaderStateForItem(MassDeleteAdapter.SearchResult item) {
+        int itemIndex = masterList.indexOf(item);
+        if (itemIndex == -1) return;
+
+        DateHeader parentHeader = null;
+        for (int i = itemIndex - 1; i >= 0; i--) {
+            if (masterList.get(i) instanceof DateHeader) {
+                parentHeader = (DateHeader) masterList.get(i);
+                break;
+            }
+        }
+        if (parentHeader == null) return;
+
+        boolean allIncluded = true;
+        int headerIndex = masterList.indexOf(parentHeader);
+        for (int i = headerIndex + 1; i < masterList.size(); i++) {
+            Object currentItem = masterList.get(i);
+            if (currentItem instanceof MassDeleteAdapter.SearchResult) {
+                if (((MassDeleteAdapter.SearchResult) currentItem).isExcluded()) {
+                    allIncluded = false;
+                    break;
+                }
+            } else if (currentItem instanceof DateHeader) {
+                break;
+            }
+        }
+        parentHeader.setChecked(allIncluded);
+
+        int displayIndex = displayList.indexOf(parentHeader);
+        if (displayIndex != -1) {
+            adapter.notifyItemChanged(displayIndex);
+        }
     }
 
     @Override
@@ -838,9 +1016,113 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         if (min < 0 || max >= displayList.size()) return;
 
         for (int i = min; i <= max; i++) {
-            displayList.get(i).setExcluded(!isSelected);
+            Object obj = displayList.get(i);
+            if (obj instanceof MassDeleteAdapter.SearchResult) {
+                MassDeleteAdapter.SearchResult searchResult = (MassDeleteAdapter.SearchResult) obj;
+                searchResult.setExcluded(!isSelected);
+                updateHeaderStateForItem(searchResult);
+            }
         }
         adapter.notifyItemRangeChanged(min, max - min + 1);
+    }
+
+    private void openFileViewer(final MassDeleteAdapter.SearchResult item) {
+        File checkFile = getFileFromResult(item);
+        if (checkFile == null || !checkFile.exists()) {
+            Toast.makeText(this, "File no longer exists.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AsyncTask<Void, Void, Intent>() {
+            @Override
+            protected Intent doInBackground(Void... voids) {
+                File file = checkFile;
+                String path = file.getAbsolutePath();
+                String name = file.getName();
+                int category = getFileCategory(name);
+                Intent intent = null;
+
+                if (category == CATEGORY_IMAGES || category == CATEGORY_VIDEOS || category == CATEGORY_AUDIO) {
+                    ArrayList<String> fileList = getSiblingFilesForViewer(file, category);
+                    int currentIndex = fileList.indexOf(path);
+                    if (currentIndex == -1) {
+                        return null;
+                    }
+
+                    if (category == CATEGORY_IMAGES) {
+                        intent = new Intent(MassDeleteActivity.this, ImageViewerActivity.class);
+                        intent.putStringArrayListExtra(ImageViewerActivity.EXTRA_FILE_PATH_LIST, fileList);
+                        intent.putExtra(ImageViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                    } else if (category == CATEGORY_VIDEOS) {
+                        intent = new Intent(MassDeleteActivity.this, VideoViewerActivity.class);
+                        intent.putStringArrayListExtra(VideoViewerActivity.EXTRA_FILE_PATH_LIST, fileList);
+                        intent.putExtra(VideoViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                    } else if (category == CATEGORY_AUDIO) {
+                        intent = new Intent(MassDeleteActivity.this, AudioPlayerActivity.class);
+                        intent.putStringArrayListExtra(AudioPlayerActivity.EXTRA_FILE_PATH_LIST, fileList);
+                        intent.putExtra(AudioPlayerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                    }
+                } else {
+                    if (name.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+                        intent = new Intent(MassDeleteActivity.this, PdfViewerActivity.class);
+                    } else {
+                        intent = new Intent(MassDeleteActivity.this, TextViewerActivity.class);
+                    }
+                    intent.putExtra(TextViewerActivity.EXTRA_FILE_PATH, path);
+                }
+                return intent;
+            }
+
+            @Override
+            protected void onPostExecute(Intent intent) {
+                if (intent != null) {
+                    startActivity(intent);
+                } else {
+                    Toast.makeText(MassDeleteActivity.this, "Error opening file.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }.execute();
+    }
+
+    private ArrayList<String> getSiblingFilesForViewer(File currentFile, final int category) {
+        ArrayList<String> siblingFiles = new ArrayList<>();
+        File parentDir = currentFile.getParentFile();
+        if (parentDir == null || !parentDir.isDirectory()) {
+            siblingFiles.add(currentFile.getAbsolutePath());
+            return siblingFiles;
+        }
+        for (Object item : masterList) {
+            if (item instanceof MassDeleteAdapter.SearchResult) {
+                MassDeleteAdapter.SearchResult result = (MassDeleteAdapter.SearchResult) item;
+                File file = getFileFromResult(result);
+                if (file != null && file.getParentFile() != null && file.getParentFile().equals(parentDir)) {
+                    if (getFileCategory(file.getName()) == category) {
+                        siblingFiles.add(file.getAbsolutePath());
+                    }
+                }
+            }
+        }
+        Collections.sort(siblingFiles);
+        return siblingFiles;
+    }
+
+    private int getFileCategory(String fileName) {
+        String extension = "";
+        int i = fileName.lastIndexOf('.');
+        if (i > 0) {
+            extension = fileName.substring(i + 1).toLowerCase(Locale.ROOT);
+        }
+
+        List<String> imageExtensions = Arrays.asList("jpg", "jpeg", "png", "gif", "bmp", "webp");
+        List<String> videoExtensions = Arrays.asList("mp4", "3gp", "mkv", "webm", "avi");
+        List<String> audioExtensions = Arrays.asList("mp3", "wav", "ogg", "m4a", "aac", "flac");
+        List<String> docExtensions = Arrays.asList("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "csv", "json", "xml", "html", "js", "css", "java", "kt", "py", "c", "cpp", "h", "cs", "php", "rb", "go", "swift", "sh", "bat", "ps1", "ini", "cfg", "conf", "md", "prop", "gradle", "pro", "sql");
+
+        if (imageExtensions.contains(extension)) return CATEGORY_IMAGES;
+        if (videoExtensions.contains(extension)) return CATEGORY_VIDEOS;
+        if (audioExtensions.contains(extension)) return CATEGORY_AUDIO;
+        if (docExtensions.contains(extension)) return CATEGORY_DOCS;
+        return CATEGORY_OTHER;
     }
 
     private static class QueryParameters {
@@ -873,17 +1155,17 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 Toast.makeText(MassDeleteActivity.this, "Deletion complete. " + deletedCount + " files removed.", Toast.LENGTH_LONG).show();
 
                 deletionProgressLayout.setVisibility(View.GONE);
-                
-                List<MassDeleteAdapter.SearchResult> toRemove = new ArrayList<>();
-                for (MassDeleteAdapter.SearchResult item : displayList) {
-                    if (!item.isExcluded()) {
+
+                List<Object> toRemove = new ArrayList<>();
+                for (Object item : masterList) {
+                    if (item instanceof MassDeleteAdapter.SearchResult && !((MassDeleteAdapter.SearchResult) item).isExcluded()) {
                         toRemove.add(item);
                     }
                 }
-                
+
                 if (!toRemove.isEmpty()) {
-                    displayList.removeAll(toRemove);
-                    adapter.notifyDataSetChanged();
+                    masterList.removeAll(toRemove);
+                    rebuildDisplayList();
                 }
             }
         };
@@ -914,9 +1196,12 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
     private void showFileOperationsDialog() {
         final List<MassDeleteAdapter.SearchResult> selectedResults = new ArrayList<>();
-        for (MassDeleteAdapter.SearchResult item : displayList) {
-            if (!item.isExcluded()) {
-                selectedResults.add(item);
+        for (Object item : masterList) {
+            if (item instanceof MassDeleteAdapter.SearchResult) {
+                MassDeleteAdapter.SearchResult result = (MassDeleteAdapter.SearchResult) item;
+                if (!result.isExcluded()) {
+                    selectedResults.add(result);
+                }
             }
         }
 
@@ -952,7 +1237,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 dialog.dismiss();
             }
         });
-        
+
         sendToDropZoneButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -1088,7 +1373,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
 
         dialog.show();
     }
-    
+
     private void showSendToDropDialog(final File fileToSend) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         LayoutInflater inflater = this.getLayoutInflater();
@@ -1110,7 +1395,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 .setNegativeButton("Cancel", null);
         builder.create().show();
     }
-    
+
     private void showSenderWarningDialog(final String receiverUsername, final File fileToSend) {
         final String secretNumber = generateSecretNumber();
 
@@ -1141,7 +1426,7 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         intent.putExtra(SenderService.EXTRA_SECRET_NUMBER, secretNumber);
         ContextCompat.startForegroundService(this, intent);
     }
-    
+
     private String generateSecretNumber() {
         SecureRandom random = new SecureRandom();
         byte[] bytes = new byte[16];
