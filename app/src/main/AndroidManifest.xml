@@ -7,10 +7,18 @@
         android:targetSdkVersion="34"
         tools:overrideLibrary="com.google.android.gms.ads_identifier" />
 
-    <!-- Permissions for File Access -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- Permissions for Full File Access (Android 11+ / API 30+) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+
+    <!-- Legacy Storage Permissions (Android 10 and below) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" tools:ignore="ScopedStorage" />
+
+    <!-- Granular Media Permissions (Android 13+ / API 33+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <!-- Permissions for Network & Services -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -19,6 +27,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    
     <!-- Permission to get cache size of other apps -->
     <uses-permission android:name="android.permission.GET_PACKAGE_SIZE" />
 
@@ -46,7 +55,8 @@
         android:allowBackup="true"
         android:icon="@drawable/hfm"
         android:label="HFM App"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        android:preserveLegacyExternalStorage="true">
 
         <activity
             android:name=".MainActivity"
