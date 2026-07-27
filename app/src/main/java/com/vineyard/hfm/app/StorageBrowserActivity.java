@@ -149,7 +149,7 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
         setupListeners();
         setupBroadcastReceivers();
 
-        new ScanFilesTask().execute(new File(currentPath));
+        new ScanFilesTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new File(currentPath));
     }
 
     @Override
@@ -205,7 +205,7 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
                 if (parent != null) {
                     currentPath = parent.getAbsolutePath();
                     pathTextView.setText(currentPath);
-                    new ScanFilesTask().execute(parent);
+                    new ScanFilesTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, parent);
                 } else {
                     finish();
                 }
@@ -272,7 +272,7 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
             if (file.isDirectory()) {
                 currentPath = file.getAbsolutePath();
                 pathTextView.setText(currentPath);
-                new ScanFilesTask().execute(file);
+                new ScanFilesTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, file);
             } else {
                 fileItem.setSelected(!fileItem.isSelected());
                 adapter.notifyItemChanged(position);
@@ -751,12 +751,12 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
             mPendingOperation = new Runnable() {
                 @Override
                 public void run() {
-                    new GatherFilesForHidingTask().execute(filesToHide.toArray(new File[0]));
+                    new GatherFilesForHidingTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, filesToHide.toArray(new File[0]));
                 }
             };
             promptForSdCardPermission();
         } else {
-            new GatherFilesForHidingTask().execute(filesToHide.toArray(new File[0]));
+            new GatherFilesForHidingTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, filesToHide.toArray(new File[0]));
         }
     }
 
@@ -1086,7 +1086,7 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
                 int deletedCount = intent.getIntExtra(DeleteService.EXTRA_DELETED_COUNT, 0);
                 Toast.makeText(StorageBrowserActivity.this, "Deletion complete. " + deletedCount + " files/folders removed.", Toast.LENGTH_LONG).show();
                 operationProgressLayout.setVisibility(View.GONE);
-                new ScanFilesTask().execute(new File(currentPath));
+                new ScanFilesTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new File(currentPath));
             }
         };
         LocalBroadcastManager.getInstance(this).registerReceiver(deleteCompletionReceiver, new IntentFilter(DeleteService.ACTION_DELETE_COMPLETE));
@@ -1229,7 +1229,7 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
                     Toast.makeText(StorageBrowserActivity.this, "Error opening file.", Toast.LENGTH_SHORT).show();
                 }
             }
-        }.execute();
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private ArrayList<String> getSiblingFilesForViewer(File currentFile, final int category) {
@@ -1353,6 +1353,6 @@ public class StorageBrowserActivity extends Activity implements StorageBrowserAd
     }
 
     public void refreshCurrentDirectory() {
-        new ScanFilesTask().execute(new File(currentPath));
+        new ScanFilesTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, new File(currentPath));
     }
 }
