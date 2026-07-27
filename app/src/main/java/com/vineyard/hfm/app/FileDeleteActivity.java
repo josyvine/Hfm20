@@ -283,7 +283,7 @@ public class FileDeleteActivity extends Activity {
             @Override
             public void onClick(View v) {
                 com.vineyard.hfm.app.ClipboardManager.getInstance().setItems(selectedFiles, com.vineyard.hfm.app.ClipboardManager.Operation.COPY);
-                Toast.makeText(FileDeleteActivity.this, selectedFiles.size() + " item(s) ready to copy. Navigate to a folder to paste.", Toast.LENGTH_LONG).show();
+                Toast.makeText(FileDeleteActivity.this, selectedFiles.size() + " item(s) ready to copy. Navigate to a folder to paste.", Toast.LENGTH_SHORT).show();
                 dialog.dismiss();
             }
         });
@@ -292,7 +292,7 @@ public class FileDeleteActivity extends Activity {
             @Override
             public void onClick(View v) {
                 com.vineyard.hfm.app.ClipboardManager.getInstance().setItems(selectedFiles, com.vineyard.hfm.app.ClipboardManager.Operation.MOVE);
-                Toast.makeText(FileDeleteActivity.this, selectedFiles.size() + " item(s) ready to move. Navigate to a folder to paste.", Toast.LENGTH_LONG).show();
+                Toast.makeText(FileDeleteActivity.this, selectedFiles.size() + " item(s) ready to move. Navigate to a folder to paste.", Toast.LENGTH_SHORT).show();
                 dialog.dismiss();
             }
         });
@@ -323,7 +323,7 @@ public class FileDeleteActivity extends Activity {
                 binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int which) {
-                        new MoveToRecycleTask(selectedFiles, which == 1).execute();
+                        new MoveToRecycleTask(selectedFiles, which == 1).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
                     }
                 });
                 binBuilder.show();
@@ -471,7 +471,8 @@ public class FileDeleteActivity extends Activity {
             return;
         }
 
-        new PreDeletionCheckTask().execute();
+        // Execute on Parallel Thread Pool to prevent global AsyncTask queue starvation
+        new PreDeletionCheckTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private class PreDeletionCheckTask extends AsyncTask<Void, Void, PreDeletionResults> {
@@ -503,7 +504,7 @@ public class FileDeleteActivity extends Activity {
                         if (!dirCache.containsKey(parentPath)) {
                             dirCache.put(parentPath, parentDir.listFiles());
                         }
-                        
+
                         File[] filesInDir = dirCache.get(parentPath);
                         if (filesInDir != null) {
                             for (File potentialSibling : filesInDir) {
@@ -515,7 +516,7 @@ public class FileDeleteActivity extends Activity {
                     }
                 }
             }
-            
+
             List<File> finalToDelete = new ArrayList<>(masterDeleteSet);
             boolean requiresSdCardPermission = false;
 
@@ -538,7 +539,7 @@ public class FileDeleteActivity extends Activity {
         @Override
         protected void onPostExecute(PreDeletionResults results) {
             if (progressDialog != null && progressDialog.isShowing()) progressDialog.dismiss();
-            
+
             if (results.requiresSdCardPermission) {
                 mFilesPendingPermission = results.filesToDelete;
                 mPendingOperation = () -> showDeleteConfirmationDialog(results.filesToDelete, results.originalCount);
@@ -548,12 +549,12 @@ public class FileDeleteActivity extends Activity {
             }
         }
     }
-    
+
     private static class PreDeletionResults {
         List<File> filesToDelete;
         boolean requiresSdCardPermission;
         int originalCount;
-        
+
         PreDeletionResults(List<File> filesToDelete, boolean requiresSdCardPermission, int originalCount) {
             this.filesToDelete = filesToDelete;
             this.requiresSdCardPermission = requiresSdCardPermission;
@@ -599,7 +600,7 @@ public class FileDeleteActivity extends Activity {
                         binBuilder.setItems(new CharSequence[]{"Phone Recycle Bin", "SD Card Recycle Bin"}, new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialogInterface, int whichBin) {
-                                new MoveToRecycleTask(filesToDelete, whichBin == 1).execute();
+                                new MoveToRecycleTask(filesToDelete, whichBin == 1).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
                             }
                         });
                         binBuilder.show();
@@ -714,7 +715,7 @@ public class FileDeleteActivity extends Activity {
                     Toast.makeText(FileDeleteActivity.this, "Error opening file.", Toast.LENGTH_SHORT).show();
                 }
             }
-        }.execute();
+        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private ArrayList<String> getSiblingFilesForViewer(File currentFile, final int category) {
