@@ -1,10 +1,15 @@
 package com.vineyard.hfm.app;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.LayerDrawable;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,6 +17,7 @@ import android.os.Environment;
 import android.os.StatFs;
 import android.os.storage.StorageManager;
 import android.os.storage.StorageVolume;
+import android.provider.Settings;
 import android.text.format.Formatter;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -24,6 +30,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import java.io.File;
@@ -58,6 +65,8 @@ public class DashboardActivity extends Activity {
     private View externalStorageSection, otgStorageSection; // Sections to hide/show
 
     private static final int FOLDER_LIST_REQUEST_CODE = 456;
+    private static final int LEGACY_STORAGE_PERMISSION_CODE = 789;
+    private static final int ALL_FILES_ACCESS_REQUEST_CODE = 999;
 
     // Category constants and definitions
     public static final String EXTRA_CATEGORY_NAME = "category_name";
@@ -75,6 +84,8 @@ public class DashboardActivity extends Activity {
     private Map<Integer, String> categoryNames = new HashMap<>();
     private Map<Integer, Integer> categoryIcons = new HashMap<>();
 
+    private boolean isAnalysisRunning = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         ThemeManager.applyTheme(this);
@@ -84,36 +95,115 @@ public class DashboardActivity extends Activity {
         initializeViews();
         initializeCategories();
         setupListeners();
+    }
 
-        new AnalyzeStorageTask().execute();
+    @Override
+    protected void onResume() {
+        super.onResume();
+        checkAndRequestStoragePermission();
+    }
+
+    private void checkAndRequestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ (API 30+) check for All Files Access
+            if (Environment.isExternalStorageManager()) {
+                startStorageAnalysisIfNeeded();
+            } else {
+                showAllFilesAccessDialog();
+            }
+        } else {
+            // Android 10 and below check for standard Runtime Permissions
+            boolean hasRead = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+            boolean hasWrite = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+
+            if (hasRead && hasWrite) {
+                startStorageAnalysisIfNeeded();
+            } else {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                        LEGACY_STORAGE_PERMISSION_CODE);
+            }
+        }
+    }
+
+    private void showAllFilesAccessDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Storage Permission Required")
+                .setMessage("Hybrid File Manager requires 'All Files Access' to display your storage usage and browse files on Android 11+ devices.\n\nPlease enable 'Allow management of all files' on the next screen.")
+                .setCancelable(false)
+                .setPositiveButton("Grant Permission", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                            intent.setData(Uri.parse("package:" + getPackageName()));
+                            startActivityForResult(intent, ALL_FILES_ACCESS_REQUEST_CODE);
+                        } catch (Exception e) {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                            startActivityForResult(intent, ALL_FILES_ACCESS_REQUEST_CODE);
+                        }
+                    }
+                })
+                .setNegativeButton("Exit", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Toast.makeText(DashboardActivity.this, "Cannot access files without storage permission.", Toast.LENGTH_LONG).show();
+                        finish();
+                    }
+                })
+                .show();
+    }
+
+    private void startStorageAnalysisIfNeeded() {
+        if (!isAnalysisRunning) {
+            new AnalyzeStorageTask().execute();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LEGACY_STORAGE_PERMISSION_CODE) {
+            boolean allGranted = true;
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allGranted = false;
+                    break;
+                }
+            }
+            if (allGranted) {
+                startStorageAnalysisIfNeeded();
+            } else {
+                Toast.makeText(this, "Storage permission is required to analyze files.", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     private void initializeViews() {
         closeButton = findViewById(R.id.close_button_dashboard);
         internalStorageBar = findViewById(R.id.internal_storage_bar);
         externalStorageBar = findViewById(R.id.external_storage_bar);
-        otgStorageBar = findViewById(R.id.otg_storage_bar); // New
+        otgStorageBar = findViewById(R.id.otg_storage_bar);
         internalStorageText = findViewById(R.id.internal_storage_text);
         externalStorageText = findViewById(R.id.external_storage_text);
-        otgStorageText = findViewById(R.id.otg_storage_text); // New
+        otgStorageText = findViewById(R.id.otg_storage_text);
         categoryListLayout = findViewById(R.id.category_list);
         loadingOverlay = findViewById(R.id.loading_overlay_dashboard);
         loadingText = findViewById(R.id.loading_text_dashboard);
         internalStorageLayout = findViewById(R.id.internal_storage_layout);
         externalStorageLayout = findViewById(R.id.external_storage_layout);
-        otgStorageLayout = findViewById(R.id.otg_storage_layout); // New
+        otgStorageLayout = findViewById(R.id.otg_storage_layout);
         externalStorageSection = findViewById(R.id.external_storage_section);
-        otgStorageSection = findViewById(R.id.otg_storage_section); // New
+        otgStorageSection = findViewById(R.id.otg_storage_section);
     }
 
     private void setupListeners() {
         closeButton.setOnClickListener(new View.OnClickListener() {
-				@Override
-				public void onClick(View v) {
-					finish();
-				}
-			});
-        // Other listeners are now set dynamically in onPostExecute
+            @Override
+            public void onClick(View v) {
+                finish();
+            }
+        });
     }
 
     private void initializeCategories() {
@@ -124,7 +214,6 @@ public class DashboardActivity extends Activity {
         categoryNames.put(CATEGORY_SCRIPTS, "Scripts and codes received today");
         categoryNames.put(CATEGORY_OTHER, "Other files received today");
 
-        // --- UPDATED: Replaced system icons with new Google Fonts vector icons ---
         categoryIcons.put(CATEGORY_IMAGES, R.drawable.image_24px);
         categoryIcons.put(CATEGORY_VIDEOS, R.drawable.video_file_24px);
         categoryIcons.put(CATEGORY_AUDIO, R.drawable.audio_file_24px);
@@ -137,65 +226,61 @@ public class DashboardActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FOLDER_LIST_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            new AnalyzeStorageTask().execute();
+            startStorageAnalysisIfNeeded();
+        } else if (requestCode == ALL_FILES_ACCESS_REQUEST_CODE) {
+            checkAndRequestStoragePermission();
         }
     }
 
-
     private void updateStorageViews(List<StorageVolumeInfo> storageInfos) {
-        // Hide all removable sections by default
         externalStorageSection.setVisibility(View.GONE);
         otgStorageSection.setVisibility(View.GONE);
 
         for (final StorageVolumeInfo info : storageInfos) {
             if (info.isPrimary) {
-                // Internal Storage
                 internalStorageText.setText(info.stats.getFormattedString());
                 internalStorageBar.setProgress(info.stats.getUsagePercentage());
                 setProgressBarColor(internalStorageBar, info.stats.getUsagePercentage());
                 internalStorageLayout.setOnClickListener(new View.OnClickListener() {
-						@Override
-						public void onClick(View v) {
-							Intent intent = new Intent(DashboardActivity.this, StorageBrowserActivity.class);
-							intent.putExtra(EXTRA_STORAGE_PATH, info.path.getAbsolutePath());
-							intent.putExtra(EXTRA_STORAGE_NAME, info.name);
-							startActivity(intent);
-						}
-					});
+                    @Override
+                    public void onClick(View v) {
+                        Intent intent = new Intent(DashboardActivity.this, StorageBrowserActivity.class);
+                        intent.putExtra(EXTRA_STORAGE_PATH, info.path.getAbsolutePath());
+                        intent.putExtra(EXTRA_STORAGE_NAME, info.name);
+                        startActivity(intent);
+                    }
+                });
             } else if (info.type == StorageVolumeInfo.StorageType.SD_CARD) {
-                // External (SD Card) Storage
                 externalStorageSection.setVisibility(View.VISIBLE);
                 externalStorageText.setText(info.stats.getFormattedString());
                 externalStorageBar.setProgress(info.stats.getUsagePercentage());
                 setProgressBarColor(externalStorageBar, info.stats.getUsagePercentage());
                 externalStorageLayout.setOnClickListener(new View.OnClickListener() {
-						@Override
-						public void onClick(View v) {
-							Intent intent = new Intent(DashboardActivity.this, StorageBrowserActivity.class);
-							intent.putExtra(EXTRA_STORAGE_PATH, info.path.getAbsolutePath());
-							intent.putExtra(EXTRA_STORAGE_NAME, info.name);
-							startActivity(intent);
-						}
-					});
+                    @Override
+                    public void onClick(View v) {
+                        Intent intent = new Intent(DashboardActivity.this, StorageBrowserActivity.class);
+                        intent.putExtra(EXTRA_STORAGE_PATH, info.path.getAbsolutePath());
+                        intent.putExtra(EXTRA_STORAGE_NAME, info.name);
+                        startActivity(intent);
+                    }
+                });
             } else if (info.type == StorageVolumeInfo.StorageType.OTG) {
-                // OTG Storage
                 otgStorageSection.setVisibility(View.VISIBLE);
                 otgStorageText.setText(info.stats.getFormattedString());
                 otgStorageBar.setProgress(info.stats.getUsagePercentage());
                 setProgressBarColor(otgStorageBar, info.stats.getUsagePercentage());
                 otgStorageLayout.setOnClickListener(new View.OnClickListener() {
-						@Override
-						public void onClick(View v) {
-							Intent intent = new Intent(DashboardActivity.this, StorageBrowserActivity.class);
-							intent.putExtra(EXTRA_STORAGE_PATH, info.path.getAbsolutePath());
-							intent.putExtra(EXTRA_STORAGE_NAME, info.name);
-							startActivity(intent);
-						}
-					});
+                    @Override
+                    public void onClick(View v) {
+                        Intent intent = new Intent(DashboardActivity.this, StorageBrowserActivity.class);
+                        intent.putExtra(EXTRA_STORAGE_PATH, info.path.getAbsolutePath());
+                        intent.putExtra(EXTRA_STORAGE_NAME, info.name);
+                        startActivity(intent);
+                    }
+                });
             }
         }
     }
-
 
     private String saveFolderMapToCache(Context context, Map<String, List<File>> folderMap) {
         String tempFileName = "temp_map_" + UUID.randomUUID().toString() + ".dat";
@@ -213,12 +298,10 @@ public class DashboardActivity extends Activity {
         }
     }
 
-
     private void populateCategoryList(final Map<Integer, Map<String, List<File>>> categorizedFiles) {
         categoryListLayout.removeAllViews();
         LayoutInflater inflater = LayoutInflater.from(this);
 
-        // Determine icon color based on active theme for visibility
         int iconTintColor;
         String currentTheme = ThemeManager.getTheme(this);
         if (currentTheme.equals(ThemeManager.THEME_DARK) || currentTheme.equals(ThemeManager.THEME_AMOLED) || currentTheme.equals(ThemeManager.THEME_NORDIC)) {
@@ -243,7 +326,6 @@ public class DashboardActivity extends Activity {
             TextView counter = categoryView.findViewById(R.id.category_count);
 
             icon.setImageResource(categoryIcons.get(categoryId));
-            // NEW: Apply tint filter for visibility
             icon.setColorFilter(iconTintColor, PorterDuff.Mode.SRC_IN);
             
             name.setText(categoryNames.get(categoryId));
@@ -251,19 +333,19 @@ public class DashboardActivity extends Activity {
 
             if (count > 0) {
                 categoryView.setOnClickListener(new View.OnClickListener() {
-						@Override
-						public void onClick(View v) {
-							String tempFileName = saveFolderMapToCache(DashboardActivity.this, folders);
-							if (tempFileName != null) {
-								Intent intent = new Intent(DashboardActivity.this, FolderListActivity.class);
-								intent.putExtra(EXTRA_CATEGORY_NAME, categoryNames.get(categoryId));
-								intent.putExtra(FolderListActivity.EXTRA_TEMP_FILE_NAME, tempFileName);
-								startActivityForResult(intent, FOLDER_LIST_REQUEST_CODE);
-							} else {
-								Toast.makeText(DashboardActivity.this, "Error preparing file list.", Toast.LENGTH_SHORT).show();
-							}
-						}
-					});
+                    @Override
+                    public void onClick(View v) {
+                        String tempFileName = saveFolderMapToCache(DashboardActivity.this, folders);
+                        if (tempFileName != null) {
+                            Intent intent = new Intent(DashboardActivity.this, FolderListActivity.class);
+                            intent.putExtra(EXTRA_CATEGORY_NAME, categoryNames.get(categoryId));
+                            intent.putExtra(FolderListActivity.EXTRA_TEMP_FILE_NAME, tempFileName);
+                            startActivityForResult(intent, FOLDER_LIST_REQUEST_CODE);
+                        } else {
+                            Toast.makeText(DashboardActivity.this, "Error preparing file list.", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
             } else {
                 categoryView.setAlpha(0.5f);
             }
@@ -271,7 +353,6 @@ public class DashboardActivity extends Activity {
             categoryListLayout.addView(categoryView);
         }
     }
-
 
     private void setProgressBarColor(ProgressBar progressBar, int percentage) {
         int color;
@@ -324,12 +405,12 @@ public class DashboardActivity extends Activity {
         }
     }
 
-
     private class AnalyzeStorageTask extends AsyncTask<Void, String, AnalysisResult> {
 
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
+            isAnalysisRunning = true;
             loadingOverlay.setVisibility(View.VISIBLE);
         }
 
@@ -359,12 +440,12 @@ public class DashboardActivity extends Activity {
             List<StorageVolumeInfo> volumes = new ArrayList<>();
             StorageManager storageManager = (StorageManager) getSystemService(Context.STORAGE_SERVICE);
             if (storageManager == null) {
-                return volumes; // Return empty if service is unavailable
+                return volumes;
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 List<StorageVolume> storageVolumes = storageManager.getStorageVolumes();
-                boolean sdCardSlotFilled = false; // Flag to track if we've already assigned a volume to the SD card slot.
+                boolean sdCardSlotFilled = false;
 
                 for (StorageVolume volume : storageVolumes) {
                     File path = getVolumePath(volume);
@@ -376,15 +457,11 @@ public class DashboardActivity extends Activity {
                             String descLower = (description != null) ? description.toLowerCase(Locale.ROOT) : "";
 
                             if (descLower.contains("usb")) {
-                                // If description explicitly says USB, it's OTG.
                                 volumes.add(new StorageVolumeInfo(path, "OTG Storage", false, StorageVolumeInfo.StorageType.OTG, DashboardActivity.this));
                             } else if (descLower.contains("sd")) {
-                                // If description explicitly says SD, it's the SD card.
                                 volumes.add(new StorageVolumeInfo(path, "SD Card", false, StorageVolumeInfo.StorageType.SD_CARD, DashboardActivity.this));
                                 sdCardSlotFilled = true;
                             } else {
-                                // AMBIGUOUS case: Description is generic (e.g., manufacturer name).
-                                // Use a heuristic: Assume the first ambiguous removable drive is the SD card.
                                 if (!sdCardSlotFilled) {
                                     volumes.add(new StorageVolumeInfo(path, "SD Card", false, StorageVolumeInfo.StorageType.SD_CARD, DashboardActivity.this));
                                     sdCardSlotFilled = true;
@@ -396,7 +473,6 @@ public class DashboardActivity extends Activity {
                     }
                 }
             } else {
-                // Fallback for older Android versions (pre-Nougat)
                 File internal = Environment.getExternalStorageDirectory();
                 volumes.add(new StorageVolumeInfo(internal, "Internal Storage", true, StorageVolumeInfo.StorageType.INTERNAL, DashboardActivity.this));
                 
@@ -406,7 +482,6 @@ public class DashboardActivity extends Activity {
                 }
             }
         
-            // Sort the volumes to ensure a consistent order: Internal, SD, OTG
             Collections.sort(volumes, new Comparator<StorageVolumeInfo>() {
                 @Override
                 public int compare(StorageVolumeInfo v1, StorageVolumeInfo v2) {
@@ -430,7 +505,6 @@ public class DashboardActivity extends Activity {
             return null;
         }
 
-
         private File getVolumePath(StorageVolume volume) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 return volume.getDirectory();
@@ -445,9 +519,8 @@ public class DashboardActivity extends Activity {
             }
         }
 
-
         private void scanDirectory(File directory, long todayStartMillis, Map<Integer, Map<String, List<File>>> categorizedFiles) {
-            if (directory == null || !directory.isDirectory() || directory.getName().startsWith(".")) {
+            if (directory == null || !directory.isDirectory() || directory.getName().startsWith(".") || directory.getName().equalsIgnoreCase("HFMRecycleBin")) {
                 return;
             }
 
@@ -498,7 +571,6 @@ public class DashboardActivity extends Activity {
             return folder.getName();
         }
 
-
         private long getStartOfToday() {
             Calendar calendar = Calendar.getInstance();
             calendar.set(Calendar.HOUR_OF_DAY, 0);
@@ -519,6 +591,7 @@ public class DashboardActivity extends Activity {
         @Override
         protected void onPostExecute(AnalysisResult result) {
             super.onPostExecute(result);
+            isAnalysisRunning = false;
             loadingOverlay.setVisibility(View.GONE);
 
             if (result != null) {
