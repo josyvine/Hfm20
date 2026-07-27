@@ -69,8 +69,12 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Launch the Dashboard Activity as a popup on start
-        startActivity(new Intent(this, DashboardActivity.class));
+        // FIX: Launch DashboardActivity ONLY on initial app cold start (savedInstanceState == null).
+        // This prevents Vivo's aggressive background RAM manager from re-launching DashboardActivity
+        // when MainActivity is recreated during search or mass delete operations.
+        if (savedInstanceState == null) {
+            startActivity(new Intent(this, DashboardActivity.class));
+        }
 
         webView = findViewById(R.id.webView);
         WebSettings webSettings = webView.getSettings();
@@ -91,12 +95,27 @@ public class MainActivity extends Activity {
 
         requestFilePermissions();
         signInAnonymously();
-        webView.loadUrl("file:///android_asset/webview-app.html");
+
+        // FIX: Restore WebView state if activity was recreated, otherwise load URL on initial launch
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState);
+        } else {
+            webView.loadUrl("file:///android_asset/webview-app.html");
+        }
+    }
+
+    // FIX: Save WebView state during activity lifecycle pause/recreation
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (webView != null) {
+            webView.saveState(outState);
+        }
     }
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
+        if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
@@ -338,7 +357,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void openDashboard() {
-            Log.d("HFMApp_WebView", "openDashboard() called. Relaunching DashboardActivity.");
+            Log.d("HFMApp_WebView", "openDashboard() called. Launching DashboardActivity.");
             Intent intent = new Intent(mContext, DashboardActivity.class);
             mContext.startActivity(intent);
         }
@@ -347,6 +366,7 @@ public class MainActivity extends Activity {
         public void openSearch() {
             Log.d("HFMApp_WebView", "openSearch() called. Launching SearchActivity.");
             Intent intent = new Intent(mContext, SearchActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
             mContext.startActivity(intent);
         }
 
@@ -354,6 +374,7 @@ public class MainActivity extends Activity {
         public void openMassDelete() {
             Log.d("HFMApp_WebView", "openMassDelete() called. Launching MassDeleteActivity.");
             Intent intent = new Intent(mContext, MassDeleteActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
             mContext.startActivity(intent);
         }
 
