@@ -20,7 +20,7 @@ import java.util.List;
  * Centralized High-Performance Recycling & MediaStore Synchronization Engine.
  * 
  * Fixes Glitch 1: Purges MediaStore DB entries by ID & clears Glide memory cache to eliminate ghost thumbnails.
- * Fixes Glitch 2: Eliminates full disk cache wiping and slow byte-copy loops for instant recycling.
+ * Fixes Glitch 2: Runs on parallel thread pool without full disk cache wiping for instant recycling.
  * Logs diagnostic metrics directly to AppLogger (/sdcard/hfm log report/hfm_diagnostic_log.txt).
  */
 public class RecycleManager {
@@ -34,9 +34,10 @@ public class RecycleManager {
 
     /**
      * Public method to execute recycling in background.
+     * Uses AsyncTask.THREAD_POOL_EXECUTOR to execute immediately on a parallel thread pool.
      */
     public static void recycleFiles(final Context context, final List<File> filesToMove, final boolean useSdCardBin, final RecycleCallback callback) {
-        new RecycleTask(context, filesToMove, useSdCardBin, callback).execute();
+        new RecycleTask(context, filesToMove, useSdCardBin, callback).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     private static class RecycleTask extends AsyncTask<Void, String, List<File>> {
