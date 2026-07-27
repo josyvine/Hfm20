@@ -247,18 +247,25 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
         searchExecutor.execute(new Runnable() {
             @Override
             public void run() {
-                final QueryParameters params = parseQuery(query);
-                List<MassDeleteAdapter.SearchResult> mediaStoreResults = executeQueryWithMediaStore(params);
+                try {
+                    final QueryParameters params = parseQuery(query);
+                    List<MassDeleteAdapter.SearchResult> mediaStoreResults = executeQueryWithMediaStore(params);
 
-                if (!mediaStoreResults.isEmpty()) {
-                    updateUIWithResults(mediaStoreResults, params);
-                } else {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(MassDeleteActivity.this, "MediaStore found nothing. Starting deep scan...", Toast.LENGTH_SHORT).show();
-                        }
-                    });
+                    if (!mediaStoreResults.isEmpty()) {
+                        updateUIWithResults(mediaStoreResults, params);
+                    } else {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MassDeleteActivity.this, "MediaStore found nothing. Starting deep scan...", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                        List<MassDeleteAdapter.SearchResult> fileSystemResults = performFallbackFileSearch(params);
+                        updateUIWithResults(fileSystemResults, params);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Search query execution failed, switching to deep scan fallback", e);
+                    final QueryParameters params = parseQuery(query);
                     List<MassDeleteAdapter.SearchResult> fileSystemResults = performFallbackFileSearch(params);
                     updateUIWithResults(fileSystemResults, params);
                 }
@@ -337,88 +344,81 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
     }
 
     private List<MassDeleteAdapter.SearchResult> executeQueryWithMediaStore(QueryParameters params) {
-        StringBuilder selection = new StringBuilder();
-        List<String> selectionArgs = new ArrayList<>();
-        Uri queryUri = MediaStore.Files.getContentUri("external");
-        addFilterClauses(selection, selectionArgs);
-
-        if (selection.length() > 0) selection.append(" AND ");
-        selection.append(MediaStore.Files.FileColumns.DATA + " NOT LIKE ?");
-        selectionArgs.add("%/HFMRecycleBin/%");
-
-        if (params.folderPath != null && !params.folderPath.isEmpty()) {
-            if (selection.length() > 0) selection.append(" AND ");
-            selection.append(MediaStore.Files.FileColumns.DATA + " LIKE ?");
-            selectionArgs.add("%" + params.folderPath + "%");
-        }
-
         List<MassDeleteAdapter.SearchResult> results = new ArrayList<>();
-        String[] projection = {
-            MediaStore.Files.FileColumns._ID,
-            MediaStore.Files.FileColumns.MEDIA_TYPE,
-            MediaStore.Files.FileColumns.DATE_MODIFIED,
-            MediaStore.Files.FileColumns.DISPLAY_NAME,
-            MediaStore.Files.FileColumns.DATA
-        };
 
-        final int pageSize = 2000;
-        int offset = 0;
-        boolean hasMore = true;
+        try {
+            StringBuilder selection = new StringBuilder();
+            List<String> selectionArgs = new ArrayList<>();
+            Uri queryUri = MediaStore.Files.getContentUri("external");
+            addFilterClauses(selection, selectionArgs);
 
-        while (hasMore) {
-            String sortOrder = MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC LIMIT " + pageSize + " OFFSET " + offset;
+            if (selection.length() > 0) selection.append(" AND ");
+            selection.append(MediaStore.Files.FileColumns.DATA + " NOT LIKE ?");
+            selectionArgs.add("%/HFMRecycleBin/%");
+
+            if (params.folderPath != null && !params.folderPath.isEmpty()) {
+                if (selection.length() > 0) selection.append(" AND ");
+                selection.append(MediaStore.Files.FileColumns.DATA + " LIKE ?");
+                selectionArgs.add("%" + params.folderPath + "%");
+            }
+
+            String[] projection = {
+                MediaStore.Files.FileColumns._ID,
+                MediaStore.Files.FileColumns.MEDIA_TYPE,
+                MediaStore.Files.FileColumns.DATE_MODIFIED,
+                MediaStore.Files.FileColumns.DISPLAY_NAME,
+                MediaStore.Files.FileColumns.DATA
+            };
+
+            // FIX: Standard sort order without invalid LIMIT/OFFSET string syntax that breaks Vivo ContentResolver
+            String sortOrder = MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC";
+
             Cursor cursor = getContentResolver().query(queryUri, projection, selection.toString(),
                     selectionArgs.toArray(new String[0]), sortOrder);
 
             if (cursor != null) {
-                int count = cursor.getCount();
-                if (count == 0) {
-                    hasMore = false;
+                try {
+                    int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
+                    int mediaTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE);
+                    int displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
+                    int dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED);
+                    int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
+
+                    while (cursor.moveToNext()) {
+                        long id = cursor.getLong(idColumn);
+                        int mediaType = cursor.getInt(mediaTypeColumn);
+                        String displayName = cursor.getString(displayNameColumn);
+                        long dateModifiedMillis = cursor.getLong(dateModifiedColumn) * 1000;
+                        String path = cursor.getString(dataColumn);
+
+                        if (path != null) {
+                            File f = new File(path);
+                            if (!f.exists()) {
+                                continue;
+                            }
+                            long fsDate = f.lastModified();
+                            if (fsDate > dateModifiedMillis) {
+                                dateModifiedMillis = fsDate;
+                            }
+                        }
+
+                        Uri contentUri;
+                        if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) {
+                            contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
+                        } else if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO) {
+                            contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
+                        } else {
+                            contentUri = ContentUris.withAppendedId(queryUri, id);
+                        }
+
+                        results.add(new MassDeleteAdapter.SearchResult(contentUri, id, dateModifiedMillis, displayName, path));
+                    }
+                } finally {
                     cursor.close();
-                    continue;
                 }
-
-                int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
-                int mediaTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE);
-                int displayNameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
-                int dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED);
-                int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
-
-                while (cursor.moveToNext()) {
-                    long id = cursor.getLong(idColumn);
-                    int mediaType = cursor.getInt(mediaTypeColumn);
-                    String displayName = cursor.getString(displayNameColumn);
-                    long dateModifiedMillis = cursor.getLong(dateModifiedColumn) * 1000;
-                    String path = cursor.getString(dataColumn);
-
-                    if (path != null) {
-                        File f = new File(path);
-                        if (!f.exists()) {
-                            continue;
-                        }
-                        long fsDate = f.lastModified();
-                        if (fsDate > dateModifiedMillis) {
-                            dateModifiedMillis = fsDate;
-                        }
-                    }
-
-                    Uri contentUri;
-                    if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE) {
-                        contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
-                    } else if (mediaType == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO) {
-                        contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id);
-                    } else {
-                        contentUri = ContentUris.withAppendedId(queryUri, id);
-                    }
-
-                    results.add(new MassDeleteAdapter.SearchResult(contentUri, id, dateModifiedMillis, displayName, path));
-                }
-                cursor.close();
-                offset += pageSize;
-                if (count < pageSize) hasMore = false;
-            } else {
-                hasMore = false;
             }
+        } catch (Exception e) {
+            Log.e(TAG, "Error performing MediaStore query on Vivo device", e);
         }
 
         return results;
@@ -598,19 +598,27 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
                 Set<String> folderSet = new HashSet<>();
                 Uri uri = MediaStore.Files.getContentUri("external");
                 String[] projection = {MediaStore.Files.FileColumns.DATA};
-                Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
-                if (cursor != null) {
-                    int dataColumn = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
-                    while (cursor.moveToNext()) {
-                        String path = cursor.getString(dataColumn);
-                        if (path != null) {
-                            File parentFile = new File(path).getParentFile();
-                            if (parentFile != null && parentFile.getName().toLowerCase().startsWith(lastWord.toLowerCase())) {
-                                folderSet.add(parentFile.getName());
+                Cursor cursor = null;
+                try {
+                    cursor = getContentResolver().query(uri, projection, null, null, null);
+                    if (cursor != null) {
+                        int dataColumn = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
+                        while (cursor.moveToNext()) {
+                            String path = cursor.getString(dataColumn);
+                            if (path != null) {
+                                File parentFile = new File(path).getParentFile();
+                                if (parentFile != null && parentFile.getName().toLowerCase().startsWith(lastWord.toLowerCase())) {
+                                    folderSet.add(parentFile.getName());
+                                }
                             }
                         }
                     }
-                    cursor.close();
+                } catch (Exception e) {
+                    Log.e(TAG, "Error fetching folder suggestions", e);
+                } finally {
+                    if (cursor != null) {
+                        cursor.close();
+                    }
                 }
                 final List<String> suggestions = new ArrayList<>(folderSet);
                 runOnUiThread(new Runnable() {
@@ -830,6 +838,8 @@ public class MassDeleteActivity extends Activity implements MassDeleteAdapter.On
             if (cursor != null && cursor.moveToFirst()) {
                 path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA));
             }
+        } catch (Exception e) {
+            Log.e(TAG, "Error resolving file from result URI", e);
         } finally {
             if (cursor != null) {
                 cursor.close();
